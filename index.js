@@ -12,7 +12,7 @@ require("dotenv").config({ path: "../.env" });
 const User = require("./models/User");
 const Invoice = require("./models/Invoice");
 const BottleStock = require('./models/BottleStock'); 
-
+const PORT = process.env.PORT||5000;
 // 
 const app = express();
 
@@ -333,4 +333,4 @@ app.delete('/InvoiceDelete/:id', async (req, res) => {
 });
 
 
-app.listen(5000, () => console.log("Server running on http://localhost:5000"));
+app.listen(PORT, () => console.log("Server running on http://localhost:5000"));
