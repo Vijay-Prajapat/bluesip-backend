@@ -18,8 +18,24 @@ const app = express();
 
 mongoose.connect(process.env.MONGO_URI);
 
-app.use(cors({ origin: "http://localhost:3000", credentials: true }
-));
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://bluesip-backend.onrender.com",
+  "https://your-production-site.com"
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json());
 app.use(session({ secret: "invoice_secret", resave: false, saveUninitialized: true }));
 app.use(passport.initialize());
