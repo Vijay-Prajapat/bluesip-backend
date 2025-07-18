@@ -20,13 +20,11 @@ mongoose.connect(process.env.MONGO_URI);
 
 const allowedOrigins = [
   "http://localhost:3000",
-  "https://bluesip-backend.onrender.com",
-  "https://your-production-site.com"
+  "https://bluesip.netlify.app"
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -35,6 +33,7 @@ app.use(cors({
   },
   credentials: true
 }));
+
 
 app.use(express.json());
 app.use(session({ secret: "invoice_secret", resave: false, saveUninitialized: true }));
