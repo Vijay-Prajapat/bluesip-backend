@@ -18,12 +18,15 @@ const app = express();
 
 mongoose.connect(process.env.MONGO_URI);
 
+
+const cors = require("cors");
+
 const allowedOrigins = [
   "http://localhost:3000",
   "https://bluesip.netlify.app"
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -31,8 +34,11 @@ app.use(cors({
       callback(new Error("Not allowed by CORS"));
     }
   },
-  credentials: true
-}));
+  credentials: true,
+  optionsSuccessStatus: 200 // for legacy browsers
+};
+
+app.use(cors(corsOptions));
 
 
 app.use(express.json());
