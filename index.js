@@ -19,7 +19,6 @@ const app = express();
 mongoose.connect(process.env.MONGO_URI);
 
 
-const cors = require("cors");
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -39,6 +38,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
 
 
 app.use(express.json());
