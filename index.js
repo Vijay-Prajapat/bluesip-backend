@@ -365,7 +365,7 @@ app.put('/api/invoices/:id', authMiddleware, async (req, res) => {
 });
 
 // Delete invoice
-// Delete Invoice Endpoint
+// 
 app.delete('/InvoiceDelete/:id', authMiddleware, async (req, res) => {
   try {
     // 1. Find the invoice
