@@ -313,7 +313,7 @@ app.get('/invoices/:id', async (req, res) => {
 });
 
 // Get all invoices
-app.get('/api/invoices', authMiddleware, async (req, res) => {
+app.get('/api/invoices', async (req, res) => {
   try {
     const invoices = await Invoice.find({ createdBy: req.user.id })
       .sort({ createdAt: -1 });
@@ -324,7 +324,7 @@ app.get('/api/invoices', authMiddleware, async (req, res) => {
 });
 
 // Update invoice
-app.put('/api/invoices/:id', authMiddleware, async (req, res) => {
+app.put('/api/invoices/:id', async (req, res) => {
   try {
     const oldInvoice = await Invoice.findById(req.params.id);
     if (!oldInvoice) {
@@ -366,7 +366,7 @@ app.put('/api/invoices/:id', authMiddleware, async (req, res) => {
 
 // Delete invoice
 // 
-app.delete('/InvoiceDelete/:id', authMiddleware, async (req, res) => {
+app.delete('/InvoiceDelete/:id', async (req, res) => {
   try {
     // 1. Find the invoice
     const invoice = await Invoice.findById(req.params.id);
@@ -404,7 +404,7 @@ app.delete('/InvoiceDelete/:id', authMiddleware, async (req, res) => {
   }
 });
 // Get invoice history
-app.get('/api/invoices/history/:invoiceId', authMiddleware, async (req, res) => {
+app.get('/api/invoices/history/:invoiceId', async (req, res) => {
   try {
     const history = await InvoiceHistory.find({ invoiceId: req.params.invoiceId })
       .sort({ timestamp: -1 })
@@ -416,7 +416,7 @@ app.get('/api/invoices/history/:invoiceId', authMiddleware, async (req, res) => 
 });
 
 // Create invoice history record
-app.post('/api/invoices/history', authMiddleware, async (req, res) => {
+app.post('/api/invoices/history', async (req, res) => {
   try {
     const history = new InvoiceHistory({
       ...req.body,
