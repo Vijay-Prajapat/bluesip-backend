@@ -11,6 +11,7 @@ require("dotenv").config();
 require("dotenv").config({ path: "../.env" });
 const User = require("./models/User");
 const Invoice = require("./models/Invoice");
+const InvoiceHistory = require('./models/InvoiceHistory');
 const BottleStock = require('./models/BottleStock'); 
 const PORT = process.env.PORT||5000;
 // 
