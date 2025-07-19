@@ -365,27 +365,44 @@ app.put('/api/invoices/:id', authMiddleware, async (req, res) => {
 });
 
 // Delete invoice
-app.delete('/api/invoices/:id', authMiddleware, async (req, res) => {
+// Delete Invoice Endpoint
+app.delete('/InvoiceDelete/:id', authMiddleware, async (req, res) => {
   try {
+    // 1. Find the invoice
     const invoice = await Invoice.findById(req.params.id);
     if (!invoice) {
-      return res.status(404).json({ success: false, message: 'Invoice not found' });
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Invoice not found' 
+      });
     }
 
+    // 2. Create history record before deleting
     await InvoiceHistory.create({
       invoiceId: req.params.id,
       action: 'deleted',
       changedBy: req.user.id,
-      notes: 'Invoice deleted'
+      notes: 'Invoice was deleted'
     });
 
-    await invoice.remove();
-    res.status(200).json({ success: true, message: 'Invoice deleted' });
+    // 3. Delete the invoice
+    await Invoice.findByIdAndDelete(req.params.id);
+
+    // 4. Send success response
+    res.status(200).json({ 
+      success: true, 
+      message: 'Invoice deleted successfully' 
+    });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Error deleting invoice:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to delete invoice',
+      error: error.message 
+    });
   }
 });
-
 // Get invoice history
 app.get('/api/invoices/history/:invoiceId', authMiddleware, async (req, res) => {
   try {
