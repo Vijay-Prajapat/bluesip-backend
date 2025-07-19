@@ -311,99 +311,91 @@ app.get('/invoices/:id', async (req, res) => {
   }
 });
 
-app.put('/InvoiceUpdate/:id', async (req, res) => {
-  const { paymentStatus, paymentDate, notes } = req.body;
 
+
+
+
+app.get('/history/:invoiceId', async (req, res) => {
   try {
-    let invoice = await Invoice.findById(req.params.id).populate('customer');
-    if (!invoice) {
-      return res.status(404).json({ msg: 'Invoice not found' });
-    }
-
-    // Update fields
-    invoice.paymentStatus = paymentStatus || invoice.paymentStatus;
-    invoice.paymentDate = paymentDate || invoice.paymentDate;
-    invoice.notes = notes || invoice.notes;
-    invoice.updatedAt = new Date();
-
-    await invoice.save();
-    
-    // Return updated invoice with customer details
-    const updatedInvoice = await Invoice.findById(invoice._id).populate('customer');
-    res.json(updatedInvoice);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-// Delete an invoice
-app.delete('/InvoiceDelete/:id', async (req, res) => {
-  try {
-    const invoice = await Invoice.findById(req.params.id);
-    if (!invoice) {
-      return res.status(404).json({ msg: 'Invoice not found' });
-    }
-
-    await invoice.remove();
-    res.json({ msg: 'Invoice removed successfully' });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-
-
-
-const trackInvoiceHistory = async (req, res, next) => {
-  try {
-    if (req.method === 'PUT' || req.method === 'DELETE') {
-      const originalInvoice = await Invoice.findById(req.params.id);
-      res.on('finish', async () => {
-        if (res.statusCode < 400) {
-          const action = req.method === 'PUT' ? 'updated' : 'deleted';
-          const changes = {};
-          
-          if (req.method === 'PUT') {
-            Object.keys(req.body).forEach(key => {
-              if (JSON.stringify(originalInvoice[key]) !== JSON.stringify(req.body[key])) {
-                changes[key] = {
-                  from: originalInvoice[key],
-                  to: req.body[key]
-                };
-              }
-            });
-          }
-
-          await new InvoiceHistory({
-            invoiceId: req.params.id,
-            action,
-            changedBy: req.user?._id,
-            changes: Object.keys(changes).length ? changes : undefined,
-            previousStatus: originalInvoice.paymentStatus,
-            newStatus: req.body.paymentStatus,
-            notes: req.body.notes
-          }).save();
-        }
-      });
-    }
-    next();
-  } catch (err) {
-    console.error('History tracking error:', err);
-    next();
-  }
-};  app.get('/api/invoices/:id/history', async (req, res) => {
-  try {
-    const history = await InvoiceHistory.find({ invoiceId: req.params.id })
+    const history = await InvoiceHistory.find({ invoiceId: req.params.invoiceId })
       .sort({ timestamp: -1 })
       .populate('changedBy', 'name email');
+    
     res.json(history);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
+       
+app.post('/Invoicehistory',  async (req, res) => {
+  try {
+    const history = new InvoiceHistory({
+      ...req.body,
+      changedBy: req.user.id
+    });
+    
+    await history.save();
+    res.status(201).json(history);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
 
+
+app.put('/InvoiceUpdate/:id', auth, async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+
+    // Update payment status and other fields
+    invoice.paymentStatus = req.body.paymentStatus || invoice.paymentStatus;
+    invoice.paymentDate = req.body.paymentDate || invoice.paymentDate;
+    invoice.notes = req.body.notes || invoice.notes;
+    invoice.updatedAt = new Date();
+
+    const updatedInvoice = await invoice.save();
+
+    // Create history record
+    const history = new InvoiceHistory({
+      invoiceId: invoice._id,
+      action: 'status_changed',
+      changedBy: req.user.id,
+      previousStatus: invoice.paymentStatus,
+      newStatus: updatedInvoice.paymentStatus,
+      notes: req.body.notes
+    });
+    await history.save();
+
+    res.json(updatedInvoice);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+app.delete('/InvoiceDelete/:id', auth, async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+
+    // Create history record before deleting
+    const history = new InvoiceHistory({
+      invoiceId: invoice._id,
+      action: 'deleted',
+      changedBy: req.user.id,
+      notes: 'Invoice was deleted'
+    });
+    await history.save();
+
+    await invoice.remove();
+    res.json({ message: 'Invoice deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
