@@ -365,32 +365,13 @@ app.put('/api/invoices/:id', async (req, res) => {
 });
 
 // Delete invoice
-// Enhanced delete endpoint with proper error handling
-app.delete('/InvoiceDelete/:id', async (req, res) => {
+// Updated delete endpoint with proper validation
+app.delete('/InvoiceDelete/:id', authMiddleware, async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // 1. Validate authentication
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Authorization token required' 
-      });
-    }
-
-    // 2. Verify token and get user
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
-    if (!user) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid user' 
-      });
-    }
-
-    // 3. Validate invoice ID
+    // 1. Validate invoice ID
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ 
         success: false, 
@@ -398,7 +379,7 @@ app.delete('/InvoiceDelete/:id', async (req, res) => {
       });
     }
 
-    // 4. Find invoice
+    // 2. Find invoice with session
     const invoice = await Invoice.findById(req.params.id).session(session);
     if (!invoice) {
       return res.status(404).json({ 
@@ -407,26 +388,34 @@ app.delete('/InvoiceDelete/:id', async (req, res) => {
       });
     }
 
-    // 5. Verify ownership
-    if (invoice.createdBy.toString() !== user._id.toString()) {
+    // 3. Safely check ownership (defensive programming)
+    const createdBy = invoice.createdBy?.toString();
+    if (!createdBy) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Invoice has no owner information' 
+      });
+    }
+
+    if (createdBy !== req.user.id) {
       return res.status(403).json({ 
         success: false, 
         message: 'Not authorized to delete this invoice' 
       });
     }
 
-    // 6. Create history record
+    // 4. Create history record
     await InvoiceHistory.create([{
       invoiceId: req.params.id,
       action: 'deleted',
-      changedBy: user._id,
+      changedBy: req.user.id,
       notes: 'Invoice was deleted'
     }], { session });
 
-    // 7. Delete invoice
+    // 5. Delete invoice
     await Invoice.findByIdAndDelete(req.params.id).session(session);
 
-    // 8. Commit transaction
+    // 6. Commit transaction
     await session.commitTransaction();
     
     res.status(200).json({ 
@@ -435,36 +424,24 @@ app.delete('/InvoiceDelete/:id', async (req, res) => {
     });
 
   } catch (error) {
-    // 9. Rollback on error
+    // 7. Rollback on error
     await session.abortTransaction();
 
     console.error('Delete Error:', {
       error: error.message,
       stack: error.stack,
       params: req.params,
-      headers: req.headers
+      user: req.user
     });
 
-    // 10. Handle specific errors
-    let status = 500;
-    let message = 'Failed to delete invoice';
-
-    if (error.name === 'JsonWebTokenError') {
-      status = 401;
-      message = 'Invalid token';
-    } else if (error.name === 'CastError') {
-      status = 400;
-      message = 'Invalid ID format';
-    }
-
-    res.status(status).json({ 
+    res.status(500).json({ 
       success: false, 
-      message,
+      message: 'Failed to delete invoice',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
 
   } finally {
-    // 11. End session
+    // 8. End session
     session.endSession();
   }
 });
