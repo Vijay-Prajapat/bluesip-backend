@@ -354,6 +354,57 @@ app.delete('/InvoiceDelete/:id', async (req, res) => {
 });
 
 
+
+
+const trackInvoiceHistory = async (req, res, next) => {
+  try {
+    if (req.method === 'PUT' || req.method === 'DELETE') {
+      const originalInvoice = await Invoice.findById(req.params.id);
+      res.on('finish', async () => {
+        if (res.statusCode < 400) {
+          const action = req.method === 'PUT' ? 'updated' : 'deleted';
+          const changes = {};
+          
+          if (req.method === 'PUT') {
+            Object.keys(req.body).forEach(key => {
+              if (JSON.stringify(originalInvoice[key]) !== JSON.stringify(req.body[key])) {
+                changes[key] = {
+                  from: originalInvoice[key],
+                  to: req.body[key]
+                };
+              }
+            });
+          }
+
+          await new InvoiceHistory({
+            invoiceId: req.params.id,
+            action,
+            changedBy: req.user?._id,
+            changes: Object.keys(changes).length ? changes : undefined,
+            previousStatus: originalInvoice.paymentStatus,
+            newStatus: req.body.paymentStatus,
+            notes: req.body.notes
+          }).save();
+        }
+      });
+    }
+    next();
+  } catch (err) {
+    console.error('History tracking error:', err);
+    next();
+  }
+};  app.get('/api/invoices/:id/history', async (req, res) => {
+  try {
+    const history = await InvoiceHistory.find({ invoiceId: req.params.id })
+      .sort({ timestamp: -1 })
+      .populate('changedBy', 'name email');
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
