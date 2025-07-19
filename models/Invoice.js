@@ -32,20 +32,25 @@ const invoiceSchema = new mongoose.Schema({
   items: [{
     srNo: { type: Number, required: true },
     description: { type: String, required: true },
+    bottleType: { 
+      type: String,
+      enum: ['250 ML', '500 ML', '1L'],
+      default: '250 ML'
+    },
     hsnCode: { type: String, required: true },
-    quantity: { type: Number, required: true },
-    rate: { type: Number, required: true },
-    amount: { type: Number, required: true }
+    quantity: { type: Number, required: true, min: 1 },
+    rate: { type: Number, required: true, min: 0 },
+    amount: { type: Number, required: true, min: 0 }
   }],
 
   // Tax Details
-  taxableValue: { type: Number, required: true },
-  cgstRate: { type: Number, default: 9 },
-  cgstAmount: { type: Number, required: true },
-  sgstRate: { type: Number, default: 9 },
-  sgstAmount: { type: Number, required: true },
-  totalTaxAmount: { type: Number, required: true },
-  grandTotal: { type: Number, required: true },
+  taxableValue: { type: Number, required: true, min: 0 },
+  cgstRate: { type: Number, default: 9, min: 0 },
+  cgstAmount: { type: Number, required: true, min: 0 },
+  sgstRate: { type: Number, default: 9, min: 0 },
+  sgstAmount: { type: Number, required: true, min: 0 },
+  totalTaxAmount: { type: Number, required: true, min: 0 },
+  grandTotal: { type: Number, required: true, min: 0 },
   amountInWords: { type: String, required: true },
 
   // Additional Information
