@@ -7,12 +7,12 @@ const invoiceSchema = new mongoose.Schema({
   sellerGSTIN: { type: String, required: true },
   sellerState: { type: String, required: true },
   sellerStateCode: { type: String, required: true },
+  dealerType: { type: String, default: "Composition Dealer" },
 
   // Buyer Information
   buyer: {
     name: { type: String, required: true },
-    address: { type: String, required: true },
-    gst: { type: String },
+    address: { type: String },
     state: { type: String },
     stateCode: { type: String }
   },
@@ -26,7 +26,7 @@ const invoiceSchema = new mongoose.Schema({
   dispatchedThrough: { type: String },
   destination: { type: String },
   termsOfDelivery: { type: String },
-  paymentTerms: { type: String, default: "100% Advance" },
+  paymentTerms: { type: String, default: "Prepaid" },
 
   // Items
   items: [{
@@ -39,6 +39,7 @@ const invoiceSchema = new mongoose.Schema({
     },
     hsnCode: { type: String, required: true },
     quantity: { type: Number, required: true, min: 1 },
+    unit: { type: String, default: "Case" },
     rate: { type: Number, required: true, min: 0 },
     amount: { type: Number, required: true, min: 0 }
   }],
