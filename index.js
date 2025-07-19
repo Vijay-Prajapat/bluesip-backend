@@ -316,7 +316,7 @@ app.get('/invoices/:id', async (req, res) => {
 
 
 
-app.get('/history/:invoiceId', async (req, res) => {
+app.get('/invoices/history/:invoiceId', async (req, res) => {
   try {
     const history = await InvoiceHistory.find({ invoiceId: req.params.invoiceId })
       .sort({ timestamp: -1 })
