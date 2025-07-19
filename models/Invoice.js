@@ -9,11 +9,13 @@ const invoiceSchema = new mongoose.Schema({
   sellerStateCode: { type: String, required: true },
 
   // Buyer Information
-  buyerName: { type: String, required: true },
-  buyerAddress: { type: String, required: true },
-  buyerGSTIN: { type: String },
-  buyerState: { type: String },
-  buyerStateCode: { type: String },
+  buyer: {
+    name: { type: String, required: true },
+    address: { type: String, required: true },
+    gst: { type: String },
+    state: { type: String },
+    stateCode: { type: String }
+  },
 
   // Invoice Details
   invoiceNo: { type: String, required: true, unique: true },
@@ -24,7 +26,7 @@ const invoiceSchema = new mongoose.Schema({
   dispatchedThrough: { type: String },
   destination: { type: String },
   termsOfDelivery: { type: String },
-  paymentTerms: { type: String },
+  paymentTerms: { type: String, default: "100% Advance" },
 
   // Items
   items: [{
@@ -38,9 +40,9 @@ const invoiceSchema = new mongoose.Schema({
 
   // Tax Details
   taxableValue: { type: Number, required: true },
-  cgstRate: { type: Number, required: true },
+  cgstRate: { type: Number, default: 9 },
   cgstAmount: { type: Number, required: true },
-  sgstRate: { type: Number, required: true },
+  sgstRate: { type: Number, default: 9 },
   sgstAmount: { type: Number, required: true },
   totalTaxAmount: { type: Number, required: true },
   grandTotal: { type: Number, required: true },
@@ -48,7 +50,6 @@ const invoiceSchema = new mongoose.Schema({
 
   // Additional Information
   remarks: { type: String },
-  ewayBillNo: { type: String },
 
   // Timestamps
   createdAt: { type: Date, default: Date.now },
@@ -59,9 +60,5 @@ invoiceSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
-
-invoiceSchema.index({ invoiceNo: 1 });
-invoiceSchema.index({ 'buyerName': 1 });
-invoiceSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model("Invoice", invoiceSchema);
