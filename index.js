@@ -422,14 +422,34 @@ app.delete('/InvoiceDelete/:id', async (req, res) => {
 
 
 // Get invoice history
-app.get('/api/invoices/history/:invoiceId', async (req, res) => {
+// Add this to your backend routes
+app.get('/invoices/history/:invoiceId', async (req, res) => {
   try {
+    // Verify the invoice exists first
+    const invoiceExists = await Invoice.exists({ _id: req.params.invoiceId });
+    if (!invoiceExists) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Invoice not found' 
+      });
+    }
+
     const history = await InvoiceHistory.find({ invoiceId: req.params.invoiceId })
       .sort({ timestamp: -1 })
       .populate('changedBy', 'name email');
-    res.status(200).json({ success: true, data: history });
+      
+    res.status(200).json({ 
+      success: true, 
+      data: history 
+    });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('History Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch history',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

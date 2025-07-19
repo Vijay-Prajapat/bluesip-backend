@@ -13,3 +13,4 @@ const InvoiceHistorySchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('InvoiceHistory', InvoiceHistorySchema);
+
