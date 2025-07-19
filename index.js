@@ -366,7 +366,7 @@ app.put('/api/invoices/:id', async (req, res) => {
 
 // Delete invoice
 // Updated delete endpoint with proper validation
-app.delete('/InvoiceDelete/:id', authMiddleware, async (req, res) => {
+app.delete('/InvoiceDelete/:id', async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
