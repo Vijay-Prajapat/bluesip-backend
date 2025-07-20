@@ -254,7 +254,7 @@ app.get("/GetInvoices", async(req,res)=>{
   return res.json(invoices);
 })
 
-// Add this to your server routes
+
 app.get('/api/invoices/last', async (req, res) => {
   try {
     const lastInvoice = await Invoice.findOne().sort({ createdAt: -1 });
@@ -264,62 +264,52 @@ app.get('/api/invoices/last', async (req, res) => {
   }
 });
 
-// PUT /api/invoices/:id
-// PUT /invoices/:id - Update an invoice
-app.put('/invoices/:id', async (req, res) => {
-  try {
-    const { paid, paymentDate, notes, paymentStatus } = req.body;
-    
-    // Find and update the invoice
-    const updatedInvoice = await Invoice.findByIdAndUpdate(
-      req.params.id,
-      { 
-        $set: {
-          paid,
-          paymentDate,
-          notes,
-          paymentStatus: paid ? 'Paid' : paymentStatus || 'Pending',
-          updatedAt: new Date()
-        }
-      },
-      { new: true, runValidators: true }
-    );
 
-    if (!updatedInvoice) {
-      return res.status(404).json({ message: 'Invoice not found' });
-    }
-
-    res.json(updatedInvoice);
-  } catch (err) {
-    console.error('Error updating invoice:', err);
-    res.status(400).json({ 
-      message: 'Error updating invoice',
-      error: err.message 
-    });
-  }
-});
-
-// GET /api/invoices/:id
-app.get('/invoices/:id', async (req, res) => {
-  try {
-    const invoice = await Invoice.findById(req.params.id);
-    if (!invoice) {
-      return res.status(404).json({ message: 'Invoice not found' });
-    }
-    res.json(invoice);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Get all invoices
 app.get('/api/invoices', async (req, res) => {
   try {
-    const invoices = await Invoice.find({ createdBy: req.user.id })
-      .sort({ createdAt: -1 });
+    const invoices = await Invoice.find().sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: invoices });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get single invoice
+app.get('/api/invoices/:id', async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' });
+    }
+    res.status(200).json({ success: true, data: invoice });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Create new invoice
+app.post('/api/invoices', async (req, res) => {
+  try {
+    // Create a dummy createdBy field since it's required in schema
+    const invoiceData = {
+      ...req.body,
+      createdBy: new mongoose.Types.ObjectId() // Generate a dummy ID
+    };
+
+    const invoice = new Invoice(invoiceData);
+    await invoice.save();
+
+    // Create history record
+    await InvoiceHistory.create({
+      invoiceId: invoice._id,
+      action: 'created',
+      newStatus: invoice.status,
+      notes: 'Invoice created'
+    });
+
+    res.status(201).json({ success: true, data: invoice });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
   }
 });
 
@@ -337,25 +327,28 @@ app.put('/api/invoices/:id', async (req, res) => {
       { new: true }
     );
 
-    // Create history record
+    // Track changes
     const changes = {};
-    ['paymentStatus', 'paymentDate', 'notes'].forEach(field => {
-      if (oldInvoice[field] !== updatedInvoice[field]) {
-        changes[field] = {
-          from: oldInvoice[field],
-          to: updatedInvoice[field]
-        };
-      }
-    });
+    if (oldInvoice.status !== updatedInvoice.status) {
+      changes.status = {
+        from: oldInvoice.status,
+        to: updatedInvoice.status
+      };
+    }
+    if (oldInvoice.notes !== updatedInvoice.notes) {
+      changes.notes = {
+        from: oldInvoice.notes,
+        to: updatedInvoice.notes
+      };
+    }
 
     await InvoiceHistory.create({
       invoiceId: req.params.id,
-      action: 'updated',
-      changedBy: req.user.id,
+      action: changes.status ? 'status_changed' : 'updated',
       changes,
-      notes: req.body.notes || 'Invoice updated',
-      previousStatus: oldInvoice.paymentStatus,
-      newStatus: updatedInvoice.paymentStatus
+      previousStatus: oldInvoice.status,
+      newStatus: updatedInvoice.status,
+      notes: req.body.notes || 'Invoice updated'
     });
 
     res.status(200).json({ success: true, data: updatedInvoice });
@@ -365,109 +358,57 @@ app.put('/api/invoices/:id', async (req, res) => {
 });
 
 // Delete invoice
-app.delete('/InvoiceDelete/:id', async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
+app.delete('/api/invoices/:id', async (req, res) => {
   try {
-    // 1. Get token from header
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) throw new Error('No token provided');
-
-    // 2. Verify token (simple version)
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    // 3. Find invoice
-    const invoice = await Invoice.findById(req.params.id).session(session);
-    if (!invoice) throw new Error('Invoice not found');
-
-    // 4. Create history record BEFORE deletion
-    await InvoiceHistory.create([{
-      invoiceId: req.params.id,
-      action: 'deleted',
-      changedBy: decoded.id,
-      previousData: invoice, // Save entire invoice data
-      timestamp: new Date()
-    }], { session });
-
-    // 5. Delete invoice
-    await Invoice.findByIdAndDelete(req.params.id).session(session);
-
-    // 6. Commit transaction
-    await session.commitTransaction();
-    
-    res.status(200).json({ success: true });
-
-  } catch (error) {
-    // 7. Rollback on error
-    await session.abortTransaction();
-    
-    console.error('DELETE ERROR:', error.message);
-    res.status(500).json({ 
-      success: false,
-      message: error.message.includes('token') ? 'Invalid token' : error.message 
-    });
-
-  } finally {
-    // 8. Clean up
-    session.endSession();
-  }
-});
-
-
-
-
-
-
-
-
-// Get invoice history
-// Add this to your backend routes
-app.get('/invoices/history/:invoiceId', async (req, res) => {
-  try {
-    // Verify the invoice exists first
-    const invoiceExists = await Invoice.exists({ _id: req.params.invoiceId });
-    if (!invoiceExists) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Invoice not found' 
-      });
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' });
     }
 
-    const history = await InvoiceHistory.find({ invoiceId: req.params.invoiceId })
-      .sort({ timestamp: -1 })
-      .populate('changedBy', 'name email');
+    // Create history record
+    await InvoiceHistory.create({
+      invoiceId: req.params.id,
+      action: 'deleted',
+      previousData: invoice,
+      notes: 'Invoice deleted'
+    });
+
+    await Invoice.findByIdAndDelete(req.params.id);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get invoice history
+app.get('/api/invoices/:id/history', async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' });
+    }
+
+    const history = await InvoiceHistory.find({ invoiceId: req.params.id })
+      .sort({ timestamp: -1 });
       
+    res.status(200).json({ success: true, data: history });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get last invoice number
+app.get('/api/invoices/last/number', async (req, res) => {
+  try {
+    const lastInvoice = await Invoice.findOne().sort({ createdAt: -1 });
     res.status(200).json({ 
       success: true, 
-      data: history 
+      data: lastInvoice ? { invoiceNo: lastInvoice.invoiceNo } : null 
     });
-
   } catch (error) {
-    console.error('History Error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to fetch history',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
-
-// Create invoice history record
-app.post('/api/invoices/history', async (req, res) => {
-  try {
-    const history = new InvoiceHistory({
-      ...req.body,
-      changedBy: req.user.id
-    });
-    await history.save();
-    res.status(201).json({ success: true, data: history });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-});
-
-
 
 
 
