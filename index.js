@@ -498,45 +498,60 @@ app.get('/api/raw-materials', async (req, res) => {
 });
 
 // Update raw material
-app.put('/api/raw-materials/:id', async (req, res) => {
+// Middleware to ensure authentication
+const authenticateUser = (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication token required' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = { _id: decoded.userId };
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
+
+// Updated PUT endpoint
+app.put('/api/raw-materials/:id', authenticateUser, async (req, res) => {
   try {
     const material = await RawMaterial.findById(req.params.id);
-    
     if (!material) {
       return res.status(404).json({ error: 'Material not found' });
     }
 
-    // Record history
-    const history = new MaterialHistory({
+    // Create history record
+    const historyRecord = new MaterialHistory({
       materialId: material._id,
-      changedBy: req.user?._id || null, // explicitly handle missing user
+      changedBy: req.user._id, // Now guaranteed to exist
       previousValue: material.currentStock,
       newValue: req.body.currentStock,
-      notes: req.body.notes || 'Stock updated'
+      notes: req.body.notes || `Stock updated from ${material.currentStock} to ${req.body.currentStock}`
     });
-    
-    await history.save();
+    await historyRecord.save();
 
     // Update material
     const updatedMaterial = await RawMaterial.findByIdAndUpdate(
       req.params.id,
       {
-        ...req.body,
-        lastUpdatedBy: req.user?._id || null
+        currentStock: req.body.currentStock,
+        notes: req.body.notes,
+        lastUpdatedBy: req.user._id
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
-    
+
     res.json(updatedMaterial);
   } catch (err) {
     console.error('Update error:', err);
     res.status(500).json({ 
       error: 'Failed to update material',
-      details: err.message // include more error details
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 });
-
 // Get material history
 app.get('/api/raw-materials/:materialId/history', async (req, res) => {
   try {
