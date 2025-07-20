@@ -434,93 +434,154 @@ app.get('/api/invoice-history/:invoiceNo', async (req, res) => {
 
 /**************************Stock-Management*********************/
 // Bottle Stock APIs
+// Get all bottle stocks
+app.get('/api/bottle-stocks', async (req, res) => {
+  try {
+    const stocks = await BottleStock.find()
+      .populate('createdBy', 'name email')
+      .populate('updatedBy', 'name email');
+    res.json(stocks);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch stocks' });
+  }
+});
+
+// Create new bottle stock
+app.post('/api/bottle-stocks/create', async (req, res) => {
+  try {
+    const stock = new BottleStock({
+      ...req.body,
+      createdBy: req.user?._id // Add if using authentication
+    });
+    await stock.save();
+    res.status(201).json(stock);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Update bottle stock
+app.put('/api/bottle-stocks/:id', async (req, res) => {
+  try {
+    const updatedStock = await BottleStock.findByIdAndUpdate(
+      req.params.id,
+      {
+        ...req.body,
+        updatedBy: req.user?._id // Add if using authentication
+      },
+      { new: true }
+    );
+    res.json(updatedStock);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Delete bottle stock
+app.delete('/api/bottle-stocks/:id', async (req, res) => {
+  try {
+    await BottleStock.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Stock deleted' });
+  } catch (err) {
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+// Get all raw materials
+app.get('/api/raw-materials', async (req, res) => {
+  try {
+    const materials = await RawMaterial.find()
+      .populate('lastUpdatedBy', 'name email');
+    res.json(materials);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch materials' });
+  }
+});
+
+// Update raw material
+app.put('/api/raw-materials/:id', async (req, res) => {
+  try {
+    const material = await RawMaterial.findById(req.params.id);
+    
+    // Record history
+    const history = new MaterialHistory({
+      materialId: material._id,
+      changedBy: req.user?._id,
+      previousValue: material.currentStock,
+      newValue: req.body.currentStock,
+      notes: req.body.notes || 'Stock updated'
+    });
+    await history.save();
+
+    // Update material
+    const updatedMaterial = await RawMaterial.findByIdAndUpdate(
+      req.params.id,
+      {
+        ...req.body,
+        lastUpdatedBy: req.user?._id
+      },
+      { new: true }
+    );
+    
+    res.json(updatedMaterial);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update material' });
+  }
+});
+
+// Get material history
+app.get('/api/raw-materials/:materialId/history', async (req, res) => {
+  try {
+    const history = await MaterialHistory.find({ 
+      materialId: req.params.materialId 
+    })
+      .populate('changedBy', 'name email')
+      .sort({ changeDate: -1 });
+    
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
 // Create new purchase
 app.post('/api/material-purchases', async (req, res) => {
   try {
-    const purchaseData = {
+    const purchase = new MaterialPurchase({
       ...req.body,
-      purchasedBy: req.user?._id,
-      purchaseDate: req.body.purchaseDate || new Date()
-    };
-
-    // Create purchase record
-    const purchase = new MaterialPurchase(purchaseData);
+      purchasedBy: req.user?._id
+    });
     await purchase.save();
 
-    // Update raw material stock
-    const material = await RawMaterial.findOne({ materialType: purchaseData.materialType });
+    // Update material stock
+    const material = await RawMaterial.findOne({ 
+      materialType: req.body.materialType 
+    });
     if (material) {
-      material.currentStock += purchaseData.quantity;
+      material.currentStock += req.body.quantity;
       material.lastUpdatedBy = req.user?._id;
       await material.save();
-    } else {
-      // Create new material if it doesn't exist
-      const newMaterial = new RawMaterial({
-        materialType: purchaseData.materialType,
-        currentStock: purchaseData.quantity,
-        minStockLevel: 500, // default
-        unit: 'pieces',
-        costPerUnit: purchaseData.cost / purchaseData.quantity,
-        companyName: purchaseData.companyName || '',
-        lastUpdatedBy: req.user?._id
-      });
-      await newMaterial.save();
     }
-
+    
     res.status(201).json(purchase);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-// Get purchases with optional date filtering
+// Get purchases with date filtering
 app.get('/api/material-purchases', async (req, res) => {
   try {
-    const { startDate, endDate, view } = req.query;
     let query = {};
     
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999); // Include entire end day
-      
+    if (req.query.startDate && req.query.endDate) {
       query.purchaseDate = {
-        $gte: start,
-        $lte: end
+        $gte: new Date(req.query.startDate),
+        $lte: new Date(req.query.endDate)
       };
     }
     
     const purchases = await MaterialPurchase.find(query)
       .populate('purchasedBy', 'name')
       .sort({ purchaseDate: -1 });
-    
-    // Calculate summary if requested
-    if (view === 'summary') {
-      const summary = purchases.reduce((acc, purchase) => {
-        acc.totalPurchases += 1;
-        acc.totalCost += purchase.cost;
-        
-        if (!acc.materials[purchase.materialType]) {
-          acc.materials[purchase.materialType] = {
-            count: 0,
-            quantity: 0,
-            cost: 0
-          };
-        }
-        
-        acc.materials[purchase.materialType].count += 1;
-        acc.materials[purchase.materialType].quantity += purchase.quantity;
-        acc.materials[purchase.materialType].cost += purchase.cost;
-        
-        return acc;
-      }, {
-        totalPurchases: 0,
-        totalCost: 0,
-        materials: {}
-      });
-      
-      return res.json({ purchases, summary });
-    }
     
     res.json(purchases);
   } catch (err) {
