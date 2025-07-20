@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const InvoiceHistorySchema = new mongoose.Schema({
   invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice', required: true },
+  invoiceNo: { type: String, required: true }, // Add this line
   action: { type: String, required: true, enum: ['created', 'updated', 'status_changed', 'deleted'] },
   changes: { type: Object },
   previousStatus: { type: String, enum: ['paid', 'pending', 'partial'] },
@@ -9,6 +10,5 @@ const InvoiceHistorySchema = new mongoose.Schema({
   notes: String,
   timestamp: { type: Date, default: Date.now }
 });
-
 
 module.exports = mongoose.model('InvoiceHistory', InvoiceHistorySchema);

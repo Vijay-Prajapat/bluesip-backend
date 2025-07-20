@@ -113,6 +113,14 @@ app.get("/api/users/:id", async (req, res) => {
 app.post("/api/invoice", async (req, res) => {
   const invoice = new Invoice(req.body);
   await invoice.save();
+     await InvoiceHistory.create({
+      invoiceId: invoice._id,
+      invoiceNo: invoice.invoiceNo,
+      action: 'created',
+      newStatus: invoice.invoiceStatus,
+      notes: 'Invoice created',
+      timestamp: new Date()
+    });
   res.send(invoice);
 });
 
@@ -278,7 +286,7 @@ app.get('/api/invoices', async (req, res) => {
 // In your backend (server.js or wherever your routes are defined)
 app.put('/api/invoices/:id', async (req, res) => {
   try {
-    const { invoiceStatus, paymentDate, notes } = req.body;
+    const { invoiceStatus, notes } = req.body;
     const oldInvoice = await Invoice.findById(req.params.id);
 
     if (!oldInvoice) {
@@ -289,44 +297,63 @@ app.put('/api/invoices/:id', async (req, res) => {
       req.params.id,
       {
         invoiceStatus,
-        paymentDate,
         notes,
         updatedAt: new Date()
       },
       { new: true }
     );
 
-    // Record history if status changed
+    // Record history for status changes
     if (oldInvoice.invoiceStatus !== invoiceStatus) {
       await InvoiceHistory.create({
         invoiceId: req.params.id,
-        invoiceNo: oldInvoice.invoiceNo, // Make sure to include invoiceNo
+        invoiceNo: oldInvoice.invoiceNo,
         action: 'status_changed',
         previousStatus: oldInvoice.invoiceStatus,
         newStatus: invoiceStatus,
-        notes,
+        notes: notes || 'Status changed',
+        timestamp: new Date()
+      });
+    }
+    // Record history for other updates
+    else if (oldInvoice.notes !== notes) {
+      await InvoiceHistory.create({
+        invoiceId: req.params.id,
+        invoiceNo: oldInvoice.invoiceNo,
+        action: 'updated',
+        changes: {
+          notes: {
+            from: oldInvoice.notes,
+            to: notes
+          }
+        },
+        notes: 'Invoice details updated',
         timestamp: new Date()
       });
     }
 
     res.json(updatedInvoice);
   } catch (err) {
-    console.error('Error updating invoice:', err);
     res.status(500).json({ message: 'Error updating invoice' });
   }
 });
 
+// Delete Invoice - Record deletion
 app.delete('/api/invoices/:id', async (req, res) => {
   try {
     const invoice = await Invoice.findByIdAndDelete(req.params.id);
 
-    if (!invoice) return res.status(404).json({ message: 'Invoice not found' });
+    if (!invoice) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
 
     await InvoiceHistory.create({
       invoiceId: req.params.id,
+      invoiceNo: invoice.invoiceNo,
       action: 'deleted',
       previousStatus: invoice.invoiceStatus,
-      notes: 'Invoice deleted'
+      notes: 'Invoice deleted',
+      timestamp: new Date()
     });
 
     res.json({ message: 'Invoice deleted successfully' });
@@ -362,6 +389,7 @@ app.get('/api/invoice-history/:invoiceNo', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch invoice history' });
   }
 });
+
 
 
 
