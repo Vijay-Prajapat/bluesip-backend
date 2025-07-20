@@ -95,9 +95,8 @@ const materialHistorySchema = new mongoose.Schema({
     ref: 'RawMaterial'
   },
   changedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: true,
-    ref: 'User'
+    type: String,  // Changed to store username directly
+    required: true
   },
   changeDate: {
     type: Date,
@@ -117,8 +116,6 @@ const materialHistorySchema = new mongoose.Schema({
     trim: true
   }
 });
-
-
 const RawMaterial = mongoose.model('RawMaterial', rawMaterialSchema);
 const MaterialPurchase = mongoose.model('MaterialPurchase', materialPurchaseSchema);
 const MaterialHistory = mongoose.model('MaterialHistory', materialHistorySchema);

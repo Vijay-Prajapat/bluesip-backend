@@ -92,10 +92,16 @@ app.post("/register", async (req, res) => {
 });
 
 app.post("/login", passport.authenticate("local"), (req, res) => {
-  const token = jwt.sign({ id: req.user._id }, process.env.JWT_SECRET, { expiresIn: "24h" });
+  const token = jwt.sign(
+    { 
+      id: req.user._id,
+      username: req.user.username // Include username in JWT
+    }, 
+    process.env.JWT_SECRET, 
+    { expiresIn: "24h" }
+  );
   res.send({ token });
 });
-
 app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 
 app.get("/auth/google/callback", passport.authenticate("google", { failureRedirect: "/login" }), (req, res) => {
@@ -499,37 +505,39 @@ app.get('/api/raw-materials', async (req, res) => {
 
 // Update raw material
 // Middleware to ensure authentication
-const authenticateUser = (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({ error: 'Authentication token required' });
-    }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = { _id: decoded.userId };
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-};
 
 // Updated PUT endpoint
-app.put('/api/raw-materials/:id', authenticateUser, async (req, res) => {
+app.put('/api/raw-materials/:id', async (req, res) => {
   try {
     const material = await RawMaterial.findById(req.params.id);
     if (!material) {
       return res.status(404).json({ error: 'Material not found' });
     }
 
+    // Get username from token or use 'system' as default
+    let username = 'system';
+    const authHeader = req.headers.authorization;
+    
+    if (authHeader) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        username = decoded.username || 'unknown-user';
+      } catch (err) {
+        username = 'invalid-token';
+      }
+    }
+
     // Create history record
     const historyRecord = new MaterialHistory({
       materialId: material._id,
-      changedBy: req.user._id, // Now guaranteed to exist
+      changedBy: username,
       previousValue: material.currentStock,
       newValue: req.body.currentStock,
-      notes: req.body.notes || `Stock updated from ${material.currentStock} to ${req.body.currentStock}`
+      notes: req.body.notes || `Stock updated by ${username}`
     });
+
     await historyRecord.save();
 
     // Update material
@@ -538,20 +546,27 @@ app.put('/api/raw-materials/:id', authenticateUser, async (req, res) => {
       {
         currentStock: req.body.currentStock,
         notes: req.body.notes,
-        lastUpdatedBy: req.user._id
+        lastUpdatedBy: username
       },
-      { new: true, runValidators: true }
+      { new: true }
     );
 
     res.json(updatedMaterial);
   } catch (err) {
     console.error('Update error:', err);
-    res.status(500).json({ 
-      error: 'Failed to update material',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
+    res.status(500).json({ error: 'Failed to update material' });
   }
 });
+
+// Helper function to extract username from JWT
+function getUsernameFromToken(token) {
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    return decoded.username || 'unknown';  // Ensure your JWT includes username
+  } catch {
+    return 'invalid-token';
+  }
+}
 // Get material history
 app.get('/api/raw-materials/:materialId/history', async (req, res) => {
   try {
