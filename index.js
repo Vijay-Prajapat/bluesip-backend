@@ -285,8 +285,28 @@ app.get('/api/invoices', async (req, res) => {
 });
 
 // In your backend (server.js or wherever your routes are defined)
+// Add this middleware to verify JWT and attach user to request
+app.use(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = await User.findById(decoded.id).select('_id name email');
+    } catch (err) {
+      console.error('Token verification failed:', err);
+    }
+  }
+  next();
+});
+
+// Update the PUT /api/invoices/:id endpoint
 app.put('/api/invoices/:id', async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
     const { invoiceStatus, paymentDate, notes } = req.body;
     const oldInvoice = await Invoice.findById(req.params.id);
 
@@ -300,36 +320,35 @@ app.put('/api/invoices/:id', async (req, res) => {
         invoiceStatus,
         paymentDate,
         notes,
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        updatedBy: req.user._id
       },
       { new: true }
     );
 
-    // Determine what changed
+    // Record history
     const changes = {};
     if (oldInvoice.invoiceStatus !== invoiceStatus) {
-      changes.status = {
-        from: oldInvoice.invoiceStatus,
-        to: invoiceStatus
-      };
+      changes.status = { from: oldInvoice.invoiceStatus, to: invoiceStatus };
     }
     if (oldInvoice.notes !== notes) {
-      changes.notes = {
-        from: oldInvoice.notes,
-        to: notes
-      };
+      changes.notes = { from: oldInvoice.notes, to: notes };
     }
 
-    // Only record history if something actually changed
     if (Object.keys(changes).length > 0) {
       await InvoiceHistory.create({
         invoiceId: req.params.id,
         invoiceNo: oldInvoice.invoiceNo,
-        action: Object.keys(changes).includes('status') ? 'status_changed' : 'updated',
+        action: changes.status ? 'status_changed' : 'updated',
         changes,
         previousStatus: oldInvoice.invoiceStatus,
         newStatus: invoiceStatus,
         notes: notes || 'Invoice updated',
+        user: {
+          id: req.user._id,
+          name: req.user.name,
+          email: req.user.email
+        },
         timestamp: new Date()
       });
     }
@@ -337,15 +356,16 @@ app.put('/api/invoices/:id', async (req, res) => {
     res.json(updatedInvoice);
   } catch (err) {
     console.error('Error updating invoice:', err);
-    res.status(500).json({ 
-      message: 'Error updating invoice',
-      error: err.message // Include the actual error message
-    });
+    res.status(500).json({ message: 'Error updating invoice' });
   }
 });
 
 app.delete('/api/invoices/:id', async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
     const invoice = await Invoice.findByIdAndDelete(req.params.id);
 
     if (!invoice) {
@@ -358,6 +378,11 @@ app.delete('/api/invoices/:id', async (req, res) => {
       action: 'deleted',
       previousStatus: invoice.invoiceStatus,
       notes: 'Invoice deleted',
+      user: {
+        id: req.user._id,
+        name: req.user.name,
+        email: req.user.email
+      },
       timestamp: new Date()
     });
 
@@ -366,6 +391,8 @@ app.delete('/api/invoices/:id', async (req, res) => {
     res.status(500).json({ message: 'Error deleting invoice' });
   }
 });
+
+
 
 app.post('/api/invoices/:id/history', async (req, res) => {
   try {
@@ -385,17 +412,19 @@ app.post('/api/invoices/:id/history', async (req, res) => {
 });
 
 
-// Get history for a specific invoice
+
+// GET /api/invoice-history/:invoiceNo - Get invoice history
 app.get('/api/invoice-history/:invoiceNo', async (req, res) => {
   try {
     const history = await InvoiceHistory.find({ invoiceNo: req.params.invoiceNo })
-      .sort({ timestamp: -1 });
+      .sort({ timestamp: -1 })
+      .populate('user.id', 'name email'); // Populate user details if needed
+    
     res.json(history);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching invoice history' });
   }
 });
-
 
 
 
