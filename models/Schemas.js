@@ -124,7 +124,6 @@ const MaterialPurchase = mongoose.model('MaterialPurchase', materialPurchaseSche
 const MaterialHistory = mongoose.model('MaterialHistory', materialHistorySchema);
 
 module.exports = {
-  BottleStock,
   RawMaterial,
   MaterialPurchase,
   MaterialHistory
