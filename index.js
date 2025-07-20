@@ -434,6 +434,18 @@ app.get('/api/invoice-history/:invoiceNo', async (req, res) => {
 
 /**************************Stock-Management*********************/
 // Bottle Stock APIs
+
+
+// Helper function for error handling
+const handleError = (res, error, defaultMessage = 'An error occurred') => {
+  console.error(error);
+  res.status(500).json({ 
+    error: error.message || defaultMessage,
+    ...(error.errors && { errors: error.errors }) 
+  });
+};
+
+// Bottle Stock APIs
 app.get('/api/bottle-stocks', async (req, res) => {
   try {
     const stocks = await BottleStock.find().sort({ createdAt: -1 });
@@ -499,39 +511,38 @@ app.get('/api/raw-materials', async (req, res) => {
 
 app.put('/api/raw-materials/:id', async (req, res) => {
   try {
-    const { currentStock, notes } = req.body;
-    
-    // Find the current material to get previous stock value
+    const { currentStock, notes, changedBy } = req.body; // Accept name
+
     const material = await RawMaterial.findById(req.params.id);
     if (!material) {
       return res.status(404).json({ error: 'Raw material not found' });
     }
-    
-    // Update the material
+
     const updatedMaterial = await RawMaterial.findByIdAndUpdate(
       req.params.id,
       { 
         currentStock,
         notes,
-        lastUpdatedBy: req.userId // Assuming you have user authentication
+        lastUpdatedBy: changedBy // Save name instead of id
       },
       { new: true, runValidators: true }
     );
-    
-    // Record the change in history
+
     await MaterialHistory.create({
       materialId: req.params.id,
-      changedBy: req.userId,
+      changedBy, // save username
       previousValue: material.currentStock,
       newValue: currentStock,
       notes
     });
-    
+
     res.json(updatedMaterial);
   } catch (error) {
-    handleError(res, error, 'Failed to update raw material');
+    console.error("Failed to update raw material", error);
+    res.status(500).json({ error: 'Failed to update raw material' });
   }
 });
+
 
 app.get('/api/raw-materials/:id/history', async (req, res) => {
   try {
