@@ -62,3 +62,5 @@ bottleStockSchema.plugin(AutoIncrement, {
   start_seq: 1000,
   prefix: 'BATCH-'
 });
+
+module.exports = mongoose.model('BottleStock', bottleStockSchema);

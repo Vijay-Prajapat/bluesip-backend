@@ -12,7 +12,7 @@ require("dotenv").config({ path: "../.env" });
 const User = require("./models/User");
 const Invoice = require("./models/Invoice");
 const InvoiceHistory = require('./models/InvoiceHistory');
-const BottleStock = require('./models/BottleStock'); 
+const BottleStock  = require('./models/BottleStock'); 
 const {  
   RawMaterial, 
   MaterialPurchase, 
