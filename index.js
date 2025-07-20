@@ -502,14 +502,19 @@ app.put('/api/raw-materials/:id', async (req, res) => {
   try {
     const material = await RawMaterial.findById(req.params.id);
     
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
     // Record history
     const history = new MaterialHistory({
       materialId: material._id,
-      changedBy: req.user?._id,
+      changedBy: req.user?._id || null, // explicitly handle missing user
       previousValue: material.currentStock,
       newValue: req.body.currentStock,
       notes: req.body.notes || 'Stock updated'
     });
+    
     await history.save();
 
     // Update material
@@ -517,14 +522,18 @@ app.put('/api/raw-materials/:id', async (req, res) => {
       req.params.id,
       {
         ...req.body,
-        lastUpdatedBy: req.user?._id
+        lastUpdatedBy: req.user?._id || null
       },
       { new: true }
     );
     
     res.json(updatedMaterial);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update material' });
+    console.error('Update error:', err);
+    res.status(500).json({ 
+      error: 'Failed to update material',
+      details: err.message // include more error details
+    });
   }
 });
 
