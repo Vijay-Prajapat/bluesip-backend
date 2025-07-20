@@ -13,6 +13,13 @@ const User = require("./models/User");
 const Invoice = require("./models/Invoice");
 const InvoiceHistory = require('./models/InvoiceHistory');
 const BottleStock = require('./models/BottleStock'); 
+const { 
+  BottleStock, 
+  RawMaterial, 
+  MaterialPurchase, 
+  MaterialHistory 
+} = require('../models/schemas');
+
 const PORT = process.env.PORT||5000;
 // 
 const app = express();
@@ -133,86 +140,86 @@ app.get("/api/invoices", async (req, res) => {
 });
 
 
-app.get('/api/bottle-stocks', async (req, res) => {
-  try {
-    const stocks = await BottleStock.find();
-    res.json(stocks);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch stocks' });
-  }
-});
-// Remove the duplicate route and keep only this one:
-app.post('/api/StockCreate', async (req, res) => {
-  try {
-    // Add default values if needed
-    const stockData = {
-      ...req.body,
-      currentStock: Number(req.body.currentStock) || 0,
-      minStockLevel: Number(req.body.minStockLevel) || 10,
-      sellingPrice: Number(req.body.sellingPrice) || 0
-    };
+// app.get('/api/bottle-stocks', async (req, res) => {
+//   try {
+//     const stocks = await BottleStock.find();
+//     res.json(stocks);
+//   } catch (err) {
+//     res.status(500).json({ error: 'Failed to fetch stocks' });
+//   }
+// });
+// // Remove the duplicate route and keep only this one:
+// app.post('/api/StockCreate', async (req, res) => {
+//   try {
+//     // Add default values if needed
+//     const stockData = {
+//       ...req.body,
+//       currentStock: Number(req.body.currentStock) || 0,
+//       minStockLevel: Number(req.body.minStockLevel) || 10,
+//       sellingPrice: Number(req.body.sellingPrice) || 0
+//     };
 
-    const stock = new BottleStock(stockData);
-    await stock.save();
-    res.status(201).json(stock);
-  } catch (err) {
-    console.error('Error details:', err);
-    if (err.name === 'ValidationError') {
-      const errors = {};
-      Object.keys(err.errors).forEach(key => {
-        errors[key] = err.errors[key].message;
-      });
-      return res.status(400).json({ errors });
-    }
-    res.status(400).json({ 
-      error: err.message,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-    });
-  }
-});
+//     const stock = new BottleStock(stockData);
+//     await stock.save();
+//     res.status(201).json(stock);
+//   } catch (err) {
+//     console.error('Error details:', err);
+//     if (err.name === 'ValidationError') {
+//       const errors = {};
+//       Object.keys(err.errors).forEach(key => {
+//         errors[key] = err.errors[key].message;
+//       });
+//       return res.status(400).json({ errors });
+//     }
+//     res.status(400).json({ 
+//       error: err.message,
+//       stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+//     });
+//   }
+// });
 
 
-app.post('/api/StockRestock/:id/restock', async (req, res) => {
-  try {
-    const stock = await BottleStock.findById(req.params.id);
-    if (!stock) return res.status(404).json({ error: 'Stock not found' });
+// app.post('/api/StockRestock/:id/restock', async (req, res) => {
+//   try {
+//     const stock = await BottleStock.findById(req.params.id);
+//     if (!stock) return res.status(404).json({ error: 'Stock not found' });
 
-    const { quantity } = req.body;
-    if (!quantity || quantity <= 0) {
-      return res.status(400).json({ error: 'Invalid quantity' });
-    }
+//     const { quantity } = req.body;
+//     if (!quantity || quantity <= 0) {
+//       return res.status(400).json({ error: 'Invalid quantity' });
+//     }
 
-    stock.currentStock += quantity;
-    stock.lastRestockDate = new Date();
-    await stock.save();
+//     stock.currentStock += quantity;
+//     stock.lastRestockDate = new Date();
+//     await stock.save();
 
-    res.json(stock);
-  } catch (err) {
-    res.status(500).json({ error: 'Restock failed' });
-  }
-});
-app.put('/api/StockUpdate/:id', async (req, res) => {
-  try {
-    const updatedStock = await BottleStock.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
-    res.json(updatedStock);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
+//     res.json(stock);
+//   } catch (err) {
+//     res.status(500).json({ error: 'Restock failed' });
+//   }
+// });
+// app.put('/api/StockUpdate/:id', async (req, res) => {
+//   try {
+//     const updatedStock = await BottleStock.findByIdAndUpdate(
+//       req.params.id,
+//       req.body,
+//       { new: true }
+//     );
+//     res.json(updatedStock);
+//   } catch (err) {
+//     res.status(400).json({ error: err.message });
+//   }
+// });
 
-app.delete('/api/StockDelete/:id', async (req, res) => {
-  try {
-    const stock = await BottleStock.findByIdAndDelete(req.params.id);
-    if (!stock) return res.status(404).json({ error: 'Stock not found' });
-    res.json({ message: 'Stock deleted' });
-  } catch (err) {
-    res.status(500).json({ error: 'Delete failed' });
-  }
-});
+// app.delete('/api/StockDelete/:id', async (req, res) => {
+//   try {
+//     const stock = await BottleStock.findByIdAndDelete(req.params.id);
+//     if (!stock) return res.status(404).json({ error: 'Stock not found' });
+//     res.json({ message: 'Stock deleted' });
+//   } catch (err) {
+//     res.status(500).json({ error: 'Delete failed' });
+//   }
+// });
 
 
 app.get('/invoices/calendar', async (req, res) => {
@@ -426,7 +433,236 @@ app.get('/api/invoice-history/:invoiceNo', async (req, res) => {
   }
 });
 
+/**************************Stock-Management*********************/
+// Bottle Stock APIs
+app.get('/api/bottle-stocks', async (req, res) => {
+  try {
+    const stocks = await BottleStock.find();
+    res.json(stocks);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch stocks' });
+  }
+});
 
+app.post('/api/bottle-stocks/create', async (req, res) => {
+  try {
+    const stockData = {
+      ...req.body,
+      currentStock: Number(req.body.currentStock) || 0,
+      minStockLevel: Number(req.body.minStockLevel) || 10,
+      sellingPrice: Number(req.body.sellingPrice) || 0,
+      createdBy: req.user?._id
+    };
+
+    const stock = new BottleStock(stockData);
+    await stock.save();
+    res.status(201).json(stock);
+  } catch (err) {
+    console.error('Error details:', err);
+    if (err.name === 'ValidationError') {
+      const errors = {};
+      Object.keys(err.errors).forEach(key => {
+        errors[key] = err.errors[key].message;
+      });
+      return res.status(400).json({ errors });
+    }
+    res.status(400).json({ 
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  }
+});
+
+app.post('/api/bottle-stocks/:id/restock', async (req, res) => {
+  try {
+    const stock = await BottleStock.findById(req.params.id);
+    if (!stock) return res.status(404).json({ error: 'Stock not found' });
+
+    const { quantity } = req.body;
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({ error: 'Invalid quantity' });
+    }
+
+    stock.currentStock += quantity;
+    stock.lastRestockDate = new Date();
+    stock.updatedBy = req.user?._id;
+    await stock.save();
+
+    res.json(stock);
+  } catch (err) {
+    res.status(500).json({ error: 'Restock failed' });
+  }
+});
+
+app.put('/api/bottle-stocks/:id', async (req, res) => {
+  try {
+    const updatedStock = await BottleStock.findByIdAndUpdate(
+      req.params.id,
+      { ...req.body, updatedBy: req.user?._id },
+      { new: true }
+    );
+    res.json(updatedStock);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/bottle-stocks/:id', async (req, res) => {
+  try {
+    const stock = await BottleStock.findByIdAndDelete(req.params.id);
+    if (!stock) return res.status(404).json({ error: 'Stock not found' });
+    res.json({ message: 'Stock deleted' });
+  } catch (err) {
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
+// Raw Material APIs
+app.get('/api/raw-materials', async (req, res) => {
+  try {
+    const materials = await RawMaterial.find();
+    res.json(materials);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch materials' });
+  }
+});
+
+app.put('/api/raw-materials/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { currentStock, notes } = req.body;
+    
+    const material = await RawMaterial.findById(id);
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
+    // Record history before updating
+    const history = new MaterialHistory({
+      materialId: material._id,
+      changedBy: req.user?._id,
+      previousValue: material.currentStock,
+      newValue: currentStock,
+      notes
+    });
+    await history.save();
+
+    // Update material
+    material.currentStock = currentStock;
+    material.lastUpdatedBy = req.user?._id;
+    await material.save();
+
+    res.json(material);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/raw-materials/:materialId/history', async (req, res) => {
+  try {
+    const { materialId } = req.params;
+    const history = await MaterialHistory.find({ materialId })
+      .populate('changedBy', 'name')
+      .sort({ changeDate: -1 });
+    
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
+// Material Purchase APIs
+app.post('/api/material-purchases', async (req, res) => {
+  try {
+    const purchaseData = {
+      ...req.body,
+      purchasedBy: req.user?._id,
+      purchaseDate: req.body.purchaseDate || new Date()
+    };
+
+    // Create purchase record
+    const purchase = new MaterialPurchase(purchaseData);
+    await purchase.save();
+
+    // Update raw material stock
+    const material = await RawMaterial.findOne({ materialType: purchaseData.materialType });
+    if (material) {
+      material.currentStock += purchaseData.quantity;
+      material.lastUpdatedBy = req.user?._id;
+      await material.save();
+    } else {
+      // Create new material if it doesn't exist
+      const newMaterial = new RawMaterial({
+        materialType: purchaseData.materialType,
+        currentStock: purchaseData.quantity,
+        minStockLevel: 500, // default
+        unit: 'pieces',
+        costPerUnit: purchaseData.cost / purchaseData.quantity,
+        companyName: purchaseData.companyName || '',
+        lastUpdatedBy: req.user?._id
+      });
+      await newMaterial.save();
+    }
+
+    res.status(201).json(purchase);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/material-purchases', async (req, res) => {
+  try {
+    const { startDate, endDate, view } = req.query;
+    let query = {};
+    
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // Include entire end day
+      
+      query.purchaseDate = {
+        $gte: start,
+        $lte: end
+      };
+    }
+    
+    const purchases = await MaterialPurchase.find(query)
+      .populate('purchasedBy', 'name')
+      .sort({ purchaseDate: -1 });
+    
+    // Calculate summary if requested
+    if (view === 'summary') {
+      const summary = purchases.reduce((acc, purchase) => {
+        acc.totalPurchases += 1;
+        acc.totalCost += purchase.cost;
+        
+        if (!acc.materials[purchase.materialType]) {
+          acc.materials[purchase.materialType] = {
+            count: 0,
+            quantity: 0,
+            cost: 0
+          };
+        }
+        
+        acc.materials[purchase.materialType].count += 1;
+        acc.materials[purchase.materialType].quantity += purchase.quantity;
+        acc.materials[purchase.materialType].cost += purchase.cost;
+        
+        return acc;
+      }, {
+        totalPurchases: 0,
+        totalCost: 0,
+        materials: {}
+      });
+      
+      return res.json({ purchases, summary });
+    }
+    
+    res.json(purchases);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch purchases' });
+  }
+});
 
 
 
