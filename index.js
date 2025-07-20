@@ -94,14 +94,29 @@ app.post("/register", async (req, res) => {
 app.post("/login", passport.authenticate("local"), (req, res) => {
   const token = jwt.sign(
     { 
-      id: req.user._id,
-      username: req.user.username // Include username in JWT
+      Id: req.user._id,
+      Name: req.user.name,
+      Email: req.user.email
     }, 
     process.env.JWT_SECRET, 
     { expiresIn: "24h" }
   );
   res.send({ token });
 });
+
+const getUsernameFromToken = (token) => {
+  if (!token) return 'system';
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    return decoded.username || 'unknown-user';
+  } catch {
+    return 'invalid-token';
+  }
+};
+
+
+
+
 app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 
 app.get("/auth/google/callback", passport.authenticate("google", { failureRedirect: "/login" }), (req, res) => {
@@ -492,22 +507,33 @@ app.delete('/api/bottle-stocks/:id', async (req, res) => {
     res.status(500).json({ error: 'Delete failed' });
   }
 });
-// Get all raw materials
+
 app.get('/api/raw-materials', async (req, res) => {
   try {
-    const materials = await RawMaterial.find()
-      .populate('lastUpdatedBy', 'name email');
+    const materials = await RawMaterial.find().sort({ materialType: 1 });
     res.json(materials);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch materials' });
+    res.status(500).json({ error: 'Failed to fetch materials', details: err.message });
   }
 });
 
-// Update raw material
-// Middleware to ensure authentication
+app.post('/api/raw-materials', async (req, res) => {
+  try {
+    const user = getUserFromToken(req.headers.authorization);
+    const material = new RawMaterial({
+      ...req.body,
+      lastUpdatedBy: user.name
+    });
+    await material.save();
+    res.status(201).json(material);
+  } catch (err) {
+    res.status(400).json({ 
+      error: 'Failed to create material',
+      details: err.message 
+    });
+  }
+});
 
-
-// Updated PUT endpoint
 app.put('/api/raw-materials/:id', async (req, res) => {
   try {
     const material = await RawMaterial.findById(req.params.id);
@@ -515,30 +541,16 @@ app.put('/api/raw-materials/:id', async (req, res) => {
       return res.status(404).json({ error: 'Material not found' });
     }
 
-    // Get username from token or use 'system' as default
-    let username = 'system';
-    const authHeader = req.headers.authorization;
-    
-    if (authHeader) {
-      const token = authHeader.split(' ')[1];
-      try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        username = decoded.username || 'unknown-user';
-      } catch (err) {
-        username = 'invalid-token';
-      }
-    }
+    const user = getUserFromToken(req.headers.authorization);
 
     // Create history record
-    const historyRecord = new MaterialHistory({
+    await new MaterialHistory({
       materialId: material._id,
-      changedBy: username,
+      changedBy: user.name,
       previousValue: material.currentStock,
       newValue: req.body.currentStock,
-      notes: req.body.notes || `Stock updated by ${username}`
-    });
-
-    await historyRecord.save();
+      notes: req.body.notes || `Stock updated by ${user.name}`
+    }).save();
 
     // Update material
     const updatedMaterial = await RawMaterial.findByIdAndUpdate(
@@ -546,85 +558,91 @@ app.put('/api/raw-materials/:id', async (req, res) => {
       {
         currentStock: req.body.currentStock,
         notes: req.body.notes,
-        lastUpdatedBy: username
+        lastUpdatedBy: user.name
       },
       { new: true }
     );
 
     res.json(updatedMaterial);
   } catch (err) {
-    console.error('Update error:', err);
-    res.status(500).json({ error: 'Failed to update material' });
+    res.status(500).json({ 
+      error: 'Failed to update material',
+      details: err.message 
+    });
   }
 });
 
-// Helper function to extract username from JWT
-function getUsernameFromToken(token) {
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    return decoded.username || 'unknown';  // Ensure your JWT includes username
-  } catch {
-    return 'invalid-token';
-  }
-}
-// Get material history
-app.get('/api/raw-materials/:materialId/history', async (req, res) => {
-  try {
-    const history = await MaterialHistory.find({ 
-      materialId: req.params.materialId 
-    })
-      .populate('changedBy', 'name email')
-      .sort({ changeDate: -1 });
-    
-    res.json(history);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch history' });
-  }
-});
-// Create new purchase
+// 3. Material Purchase Endpoints
 app.post('/api/material-purchases', async (req, res) => {
   try {
+    const user = getUserFromToken(req.headers.authorization);
     const purchase = new MaterialPurchase({
       ...req.body,
-      purchasedBy: req.user?._id
+      purchasedBy: user.name
     });
     await purchase.save();
 
-    // Update material stock
-    const material = await RawMaterial.findOne({ 
-      materialType: req.body.materialType 
-    });
+    // Update stock
+    const material = await RawMaterial.findOne({ materialType: req.body.materialType });
     if (material) {
       material.currentStock += req.body.quantity;
-      material.lastUpdatedBy = req.user?._id;
+      material.lastUpdatedBy = user.name;
       await material.save();
     }
-    
+
     res.status(201).json(purchase);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(500).json({ 
+      error: 'Failed to record purchase',
+      details: err.message 
+    });
   }
 });
 
-// Get purchases with date filtering
 app.get('/api/material-purchases', async (req, res) => {
   try {
+    const { startDate, endDate } = req.query;
     let query = {};
     
-    if (req.query.startDate && req.query.endDate) {
+    if (startDate && endDate) {
       query.purchaseDate = {
-        $gte: new Date(req.query.startDate),
-        $lte: new Date(req.query.endDate)
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
       };
     }
-    
+
     const purchases = await MaterialPurchase.find(query)
-      .populate('purchasedBy', 'name')
       .sort({ purchaseDate: -1 });
-    
     res.json(purchases);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch purchases' });
+    res.status(500).json({ 
+      error: 'Failed to fetch purchases',
+      details: err.message 
+    });
+  }
+});
+
+// 4. Material History Endpoints
+app.get('/api/material-history/:materialId', async (req, res) => {
+  try {
+    const history = await MaterialHistory.find({ materialId: req.params.materialId })
+      .sort({ changeDate: -1 });
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ 
+      error: 'Failed to fetch history',
+      details: err.message 
+    });
+  }
+});
+
+// 5. Protected User Endpoint (example)
+app.get('/api/current-user', (req, res) => {
+  try {
+    const user = getUserFromToken(req.headers.authorization);
+    res.json(user);
+  } catch (err) {
+    res.status(401).json({ error: 'Unauthorized' });
   }
 });
 

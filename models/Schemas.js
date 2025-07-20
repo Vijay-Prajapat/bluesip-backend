@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 
-
 // Raw Material Schema
 const rawMaterialSchema = new mongoose.Schema({
   materialType: {
@@ -38,8 +37,8 @@ const rawMaterialSchema = new mongoose.Schema({
     trim: true
   },
   lastUpdatedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    type: String,  // Changed from ObjectId to String
+    required: true
   }
 }, { timestamps: true });
 
@@ -77,8 +76,8 @@ const materialPurchaseSchema = new mongoose.Schema({
     trim: true
   },
   purchasedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    type: String,  // Changed from ObjectId to String
+    required: true
   },
   notes: {
     type: String,
@@ -95,7 +94,7 @@ const materialHistorySchema = new mongoose.Schema({
     ref: 'RawMaterial'
   },
   changedBy: {
-    type: String,  // Changed to store username directly
+    type: String,
     required: true
   },
   changeDate: {
@@ -116,6 +115,7 @@ const materialHistorySchema = new mongoose.Schema({
     trim: true
   }
 });
+
 const RawMaterial = mongoose.model('RawMaterial', rawMaterialSchema);
 const MaterialPurchase = mongoose.model('MaterialPurchase', materialPurchaseSchema);
 const MaterialHistory = mongoose.model('MaterialHistory', materialHistorySchema);
