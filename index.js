@@ -265,14 +265,28 @@ app.get('/api/invoices/last', async (req, res) => {
 });
 
 
+
+
+// Get all invoices - Updated response format
 app.get('/api/invoices', async (req, res) => {
   try {
     const invoices = await Invoice.find().sort({ createdAt: -1 });
-    res.status(200).json({ success: true, data: invoices });
+    res.status(200).json({ 
+      success: true, 
+      data: invoices,  // Ensure data is always returned
+      message: 'Invoices fetched successfully'
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ 
+      success: false, 
+      data: null,
+      message: error.message 
+    });
   }
 });
+
+
+
 
 // Get single invoice
 app.get('/api/invoices/:id', async (req, res) => {
