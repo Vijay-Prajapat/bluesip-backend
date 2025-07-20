@@ -531,42 +531,72 @@ app.put('/api/raw-materials/:id', async (req, res) => {
     const { id } = req.params;
     const { currentStock, notes } = req.body;
     
+    // Validate input
+    if (currentStock === undefined || isNaN(currentStock)) {
+      return res.status(400).json({ error: 'Invalid currentStock value' });
+    }
+
     const material = await RawMaterial.findById(id);
     if (!material) {
       return res.status(404).json({ error: 'Material not found' });
     }
 
+    // Convert to number in case it comes as string
+    const newStockValue = Number(currentStock);
+
     // Record history before updating
     const history = new MaterialHistory({
       materialId: material._id,
-      changedBy: req.user?._id,
+      changedBy: req.user?._id || null, // Handle case when no user is authenticated
       previousValue: material.currentStock,
-      newValue: currentStock,
-      notes
+      newValue: newStockValue,
+      notes: notes || 'Stock updated',
+      changeDate: new Date()
     });
     await history.save();
 
     // Update material
-    material.currentStock = currentStock;
-    material.lastUpdatedBy = req.user?._id;
+    material.currentStock = newStockValue;
+    material.lastUpdatedBy = req.user?._id || null;
     await material.save();
 
-    res.json(material);
+    res.json({
+      ...material.toObject(),
+      history: await MaterialHistory.find({ materialId: material._id })
+        .sort({ changeDate: -1 })
+        .limit(5)
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error updating material:', err);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
 app.get('/api/raw-materials/:materialId/history', async (req, res) => {
   try {
     const { materialId } = req.params;
+    
+    // Validate material exists
+    const material = await RawMaterial.findById(materialId);
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
     const history = await MaterialHistory.find({ materialId })
-      .populate('changedBy', 'name')
-      .sort({ changeDate: -1 });
+      .populate('changedBy', 'name email')
+      .sort({ changeDate: -1 })
+      .limit(50); // Limit to prevent excessive data transfer
     
     res.json(history);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch history' });
+    console.error('Error fetching material history:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch history',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
