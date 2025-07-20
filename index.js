@@ -305,15 +305,31 @@ app.put('/api/invoices/:id', async (req, res) => {
       { new: true }
     );
 
-    // Record history if status changed
+    // Determine what changed
+    const changes = {};
     if (oldInvoice.invoiceStatus !== invoiceStatus) {
+      changes.status = {
+        from: oldInvoice.invoiceStatus,
+        to: invoiceStatus
+      };
+    }
+    if (oldInvoice.notes !== notes) {
+      changes.notes = {
+        from: oldInvoice.notes,
+        to: notes
+      };
+    }
+
+    // Only record history if something actually changed
+    if (Object.keys(changes).length > 0) {
       await InvoiceHistory.create({
         invoiceId: req.params.id,
-        invoiceNo: oldInvoice.invoiceNo, // Make sure to include invoiceNo
-        action: 'status_changed',
+        invoiceNo: oldInvoice.invoiceNo,
+        action: Object.keys(changes).includes('status') ? 'status_changed' : 'updated',
+        changes,
         previousStatus: oldInvoice.invoiceStatus,
         newStatus: invoiceStatus,
-        notes,
+        notes: notes || 'Invoice updated',
         timestamp: new Date()
       });
     }
@@ -321,7 +337,10 @@ app.put('/api/invoices/:id', async (req, res) => {
     res.json(updatedInvoice);
   } catch (err) {
     console.error('Error updating invoice:', err);
-    res.status(500).json({ message: 'Error updating invoice' });
+    res.status(500).json({ 
+      message: 'Error updating invoice',
+      error: err.message // Include the actual error message
+    });
   }
 });
 
@@ -365,14 +384,15 @@ app.post('/api/invoices/:id/history', async (req, res) => {
   }
 });
 
+
+// Get history for a specific invoice
 app.get('/api/invoice-history/:invoiceNo', async (req, res) => {
   try {
-    const invoiceNo = req.params.invoiceNo;
-    const history = await InvoiceHistory.find({ invoiceNo }).sort({ date: -1 });
-    res.status(200).json(history);
+    const history = await InvoiceHistory.find({ invoiceNo: req.params.invoiceNo })
+      .sort({ timestamp: -1 });
+    res.json(history);
   } catch (err) {
-    console.error('Error fetching invoice history:', err);
-    res.status(500).json({ error: 'Failed to fetch invoice history' });
+    res.status(500).json({ message: 'Error fetching invoice history' });
   }
 });
 
