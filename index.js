@@ -92,30 +92,9 @@ app.post("/register", async (req, res) => {
 });
 
 app.post("/login", passport.authenticate("local"), (req, res) => {
-  const token = jwt.sign(
-    { 
-      Id: req.user._id,
-      Name: req.user.name,
-      Email: req.user.email
-    }, 
-    process.env.JWT_SECRET, 
-    { expiresIn: "24h" }
-  );
+  const token = jwt.sign({ id: req.user._id }, process.env.JWT_SECRET, { expiresIn: "24h" });
   res.send({ token });
 });
-
-const getUsernameFromToken = (token) => {
-  if (!token) return 'system';
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    return decoded.username || 'unknown-user';
-  } catch {
-    return 'invalid-token';
-  }
-};
-
-
-
 
 app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 
@@ -455,196 +434,189 @@ app.get('/api/invoice-history/:invoiceNo', async (req, res) => {
 
 /**************************Stock-Management*********************/
 // Bottle Stock APIs
-// Get all bottle stocks
 app.get('/api/bottle-stocks', async (req, res) => {
   try {
-    const stocks = await BottleStock.find()
-      .populate('createdBy', 'name email')
-      .populate('updatedBy', 'name email');
+    const stocks = await BottleStock.find().sort({ createdAt: -1 });
     res.json(stocks);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch stocks' });
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch bottle stocks');
   }
 });
 
-// Create new bottle stock
 app.post('/api/bottle-stocks/create', async (req, res) => {
   try {
-    const stock = new BottleStock({
+    const stockData = {
       ...req.body,
-      createdBy: req.user?._id // Add if using authentication
-    });
-    await stock.save();
-    res.status(201).json(stock);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+      createdBy: req.userId // Assuming you have user authentication
+    };
+    const newStock = await BottleStock.create(stockData);
+    res.status(201).json(newStock);
+  } catch (error) {
+    handleError(res, error, 'Failed to create bottle stock');
   }
 });
 
-// Update bottle stock
 app.put('/api/bottle-stocks/:id', async (req, res) => {
   try {
     const updatedStock = await BottleStock.findByIdAndUpdate(
       req.params.id,
-      {
+      { 
         ...req.body,
-        updatedBy: req.user?._id // Add if using authentication
+        updatedBy: req.userId // Assuming you have user authentication
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
+    if (!updatedStock) {
+      return res.status(404).json({ error: 'Bottle stock not found' });
+    }
     res.json(updatedStock);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+  } catch (error) {
+    handleError(res, error, 'Failed to update bottle stock');
   }
 });
 
-// Delete bottle stock
 app.delete('/api/bottle-stocks/:id', async (req, res) => {
   try {
-    await BottleStock.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Stock deleted' });
-  } catch (err) {
-    res.status(500).json({ error: 'Delete failed' });
+    const deletedStock = await BottleStock.findByIdAndDelete(req.params.id);
+    if (!deletedStock) {
+      return res.status(404).json({ error: 'Bottle stock not found' });
+    }
+    res.json({ message: 'Bottle stock deleted successfully' });
+  } catch (error) {
+    handleError(res, error, 'Failed to delete bottle stock');
   }
 });
 
+// Raw Material APIs
 app.get('/api/raw-materials', async (req, res) => {
   try {
     const materials = await RawMaterial.find().sort({ materialType: 1 });
     res.json(materials);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch materials', details: err.message });
-  }
-});
-
-app.post('/api/raw-materials', async (req, res) => {
-  try {
-    const user = getUserFromToken(req.headers.authorization);
-    const material = new RawMaterial({
-      ...req.body,
-      lastUpdatedBy: user.name
-    });
-    await material.save();
-    res.status(201).json(material);
-  } catch (err) {
-    res.status(400).json({ 
-      error: 'Failed to create material',
-      details: err.message 
-    });
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch raw materials');
   }
 });
 
 app.put('/api/raw-materials/:id', async (req, res) => {
   try {
+    const { currentStock, notes } = req.body;
+    
+    // Find the current material to get previous stock value
     const material = await RawMaterial.findById(req.params.id);
     if (!material) {
-      return res.status(404).json({ error: 'Material not found' });
+      return res.status(404).json({ error: 'Raw material not found' });
     }
-
-    const user = getUserFromToken(req.headers.authorization);
-
-    // Create history record
-    await new MaterialHistory({
-      materialId: material._id,
-      changedBy: user.name,
-      previousValue: material.currentStock,
-      newValue: req.body.currentStock,
-      notes: req.body.notes || `Stock updated by ${user.name}`
-    }).save();
-
-    // Update material
+    
+    // Update the material
     const updatedMaterial = await RawMaterial.findByIdAndUpdate(
       req.params.id,
-      {
-        currentStock: req.body.currentStock,
-        notes: req.body.notes,
-        lastUpdatedBy: user.name
+      { 
+        currentStock,
+        notes,
+        lastUpdatedBy: req.userId // Assuming you have user authentication
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
-
+    
+    // Record the change in history
+    await MaterialHistory.create({
+      materialId: req.params.id,
+      changedBy: req.userId,
+      previousValue: material.currentStock,
+      newValue: currentStock,
+      notes
+    });
+    
     res.json(updatedMaterial);
-  } catch (err) {
-    res.status(500).json({ 
-      error: 'Failed to update material',
-      details: err.message 
-    });
+  } catch (error) {
+    handleError(res, error, 'Failed to update raw material');
   }
 });
 
-// 3. Material Purchase Endpoints
-app.post('/api/material-purchases', async (req, res) => {
+app.get('/api/raw-materials/:id/history', async (req, res) => {
   try {
-    const user = getUserFromToken(req.headers.authorization);
-    const purchase = new MaterialPurchase({
-      ...req.body,
-      purchasedBy: user.name
-    });
-    await purchase.save();
-
-    // Update stock
-    const material = await RawMaterial.findOne({ materialType: req.body.materialType });
-    if (material) {
-      material.currentStock += req.body.quantity;
-      material.lastUpdatedBy = user.name;
-      await material.save();
-    }
-
-    res.status(201).json(purchase);
-  } catch (err) {
-    res.status(500).json({ 
-      error: 'Failed to record purchase',
-      details: err.message 
-    });
+    const history = await MaterialHistory.find({ materialId: req.params.id })
+      .sort({ changeDate: -1 })
+      .limit(50);
+    res.json(history);
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch material history');
   }
 });
 
+// Material Purchase APIs
 app.get('/api/material-purchases', async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
-    let query = {};
+    const { startDate, endDate, view } = req.query;
     
+    let query = {};
     if (startDate && endDate) {
       query.purchaseDate = {
         $gte: new Date(startDate),
         $lte: new Date(endDate)
       };
     }
-
-    const purchases = await MaterialPurchase.find(query)
-      .sort({ purchaseDate: -1 });
-    res.json(purchases);
-  } catch (err) {
-    res.status(500).json({ 
-      error: 'Failed to fetch purchases',
-      details: err.message 
-    });
+    
+    if (view === 'summary') {
+      const purchases = await MaterialPurchase.find(query);
+      
+      // Calculate summary
+      const summary = {
+        totalPurchases: purchases.length,
+        totalCost: purchases.reduce((sum, p) => sum + p.cost, 0),
+        materials: {}
+      };
+      
+      purchases.forEach(purchase => {
+        if (!summary.materials[purchase.materialType]) {
+          summary.materials[purchase.materialType] = {
+            count: 0,
+            quantity: 0,
+            cost: 0
+          };
+        }
+        
+        summary.materials[purchase.materialType].count += 1;
+        summary.materials[purchase.materialType].quantity += purchase.quantity;
+        summary.materials[purchase.materialType].cost += purchase.cost;
+      });
+      
+      return res.json({ purchases, summary });
+    }
+    
+    const purchases = await MaterialPurchase.find(query).sort({ purchaseDate: -1 });
+    res.json({ purchases });
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch material purchases');
   }
 });
 
-// 4. Material History Endpoints
-app.get('/api/material-history/:materialId', async (req, res) => {
+app.post('/api/material-purchases', async (req, res) => {
   try {
-    const history = await MaterialHistory.find({ materialId: req.params.materialId })
-      .sort({ changeDate: -1 });
-    res.json(history);
-  } catch (err) {
-    res.status(500).json({ 
-      error: 'Failed to fetch history',
-      details: err.message 
-    });
+    const purchaseData = {
+      ...req.body,
+      purchasedBy: req.userId // Assuming you have user authentication
+    };
+    
+    const newPurchase = await MaterialPurchase.create(purchaseData);
+    
+    // Update the raw material stock
+    const materialType = req.body.materialType;
+    const quantity = req.body.quantity;
+    
+    await RawMaterial.findOneAndUpdate(
+      { materialType, ...(materialType === 'Company Label' ? { companyName: req.body.companyName } : {}) },
+      { $inc: { currentStock: quantity } },
+      { new: true }
+    );
+    
+    res.status(201).json(newPurchase);
+  } catch (error) {
+    handleError(res, error, 'Failed to record material purchase');
   }
 });
 
-// 5. Protected User Endpoint (example)
-app.get('/api/current-user', (req, res) => {
-  try {
-    const user = getUserFromToken(req.headers.authorization);
-    res.json(user);
-  } catch (err) {
-    res.status(401).json({ error: 'Unauthorized' });
-  }
-});
+
 
 
 app.listen(PORT, () => {
