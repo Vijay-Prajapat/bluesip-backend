@@ -434,173 +434,7 @@ app.get('/api/invoice-history/:invoiceNo', async (req, res) => {
 
 /**************************Stock-Management*********************/
 // Bottle Stock APIs
-app.get('/api/bottle-stocks', async (req, res) => {
-  try {
-    const stocks = await BottleStock.find();
-    res.json(stocks);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch stocks' });
-  }
-});
-
-app.post('/api/bottle-stocks/create', async (req, res) => {
-  try {
-    const stockData = {
-      ...req.body,
-      currentStock: Number(req.body.currentStock) || 0,
-      minStockLevel: Number(req.body.minStockLevel) || 10,
-      sellingPrice: Number(req.body.sellingPrice) || 0,
-      createdBy: req.user?._id
-    };
-
-    const stock = new BottleStock(stockData);
-    await stock.save();
-    res.status(201).json(stock);
-  } catch (err) {
-    console.error('Error details:', err);
-    if (err.name === 'ValidationError') {
-      const errors = {};
-      Object.keys(err.errors).forEach(key => {
-        errors[key] = err.errors[key].message;
-      });
-      return res.status(400).json({ errors });
-    }
-    res.status(400).json({ 
-      error: err.message,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-    });
-  }
-});
-
-app.post('/api/bottle-stocks/:id/restock', async (req, res) => {
-  try {
-    const stock = await BottleStock.findById(req.params.id);
-    if (!stock) return res.status(404).json({ error: 'Stock not found' });
-
-    const { quantity } = req.body;
-    if (!quantity || quantity <= 0) {
-      return res.status(400).json({ error: 'Invalid quantity' });
-    }
-
-    stock.currentStock += quantity;
-    stock.lastRestockDate = new Date();
-    stock.updatedBy = req.user?._id;
-    await stock.save();
-
-    res.json(stock);
-  } catch (err) {
-    res.status(500).json({ error: 'Restock failed' });
-  }
-});
-
-app.put('/api/bottle-stocks/:id', async (req, res) => {
-  try {
-    const updatedStock = await BottleStock.findByIdAndUpdate(
-      req.params.id,
-      { ...req.body, updatedBy: req.user?._id },
-      { new: true }
-    );
-    res.json(updatedStock);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-app.delete('/api/bottle-stocks/:id', async (req, res) => {
-  try {
-    const stock = await BottleStock.findByIdAndDelete(req.params.id);
-    if (!stock) return res.status(404).json({ error: 'Stock not found' });
-    res.json({ message: 'Stock deleted' });
-  } catch (err) {
-    res.status(500).json({ error: 'Delete failed' });
-  }
-});
-
-// Raw Material APIs
-app.get('/api/raw-materials', async (req, res) => {
-  try {
-    const materials = await RawMaterial.find();
-    res.json(materials);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch materials' });
-  }
-});
-
-app.put('/api/raw-materials/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { currentStock, notes } = req.body;
-    
-    // Validate input
-    if (currentStock === undefined || isNaN(currentStock)) {
-      return res.status(400).json({ error: 'Invalid currentStock value' });
-    }
-
-    const material = await RawMaterial.findById(id);
-    if (!material) {
-      return res.status(404).json({ error: 'Material not found' });
-    }
-
-    // Convert to number in case it comes as string
-    const newStockValue = Number(currentStock);
-
-    // Record history before updating
-    const history = new MaterialHistory({
-      materialId: material._id,
-      changedBy: req.user?._id || null, // Handle case when no user is authenticated
-      previousValue: material.currentStock,
-      newValue: newStockValue,
-      notes: notes || 'Stock updated',
-      changeDate: new Date()
-    });
-    await history.save();
-
-    // Update material
-    material.currentStock = newStockValue;
-    material.lastUpdatedBy = req.user?._id || null;
-    await material.save();
-
-    res.json({
-      ...material.toObject(),
-      history: await MaterialHistory.find({ materialId: material._id })
-        .sort({ changeDate: -1 })
-        .limit(5)
-    });
-  } catch (err) {
-    console.error('Error updating material:', err);
-    res.status(500).json({ 
-      error: 'Internal server error',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-app.get('/api/raw-materials/:materialId/history', async (req, res) => {
-  try {
-    const { materialId } = req.params;
-    
-    // Validate material exists
-    const material = await RawMaterial.findById(materialId);
-    if (!material) {
-      return res.status(404).json({ error: 'Material not found' });
-    }
-
-    const history = await MaterialHistory.find({ materialId })
-      .populate('changedBy', 'name email')
-      .sort({ changeDate: -1 })
-      .limit(50); // Limit to prevent excessive data transfer
-    
-    res.json(history);
-  } catch (err) {
-    console.error('Error fetching material history:', err);
-    res.status(500).json({ 
-      error: 'Failed to fetch history',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-// Material Purchase APIs
+// Create new purchase
 app.post('/api/material-purchases', async (req, res) => {
   try {
     const purchaseData = {
@@ -639,6 +473,7 @@ app.post('/api/material-purchases', async (req, res) => {
   }
 });
 
+// Get purchases with optional date filtering
 app.get('/api/material-purchases', async (req, res) => {
   try {
     const { startDate, endDate, view } = req.query;
@@ -692,9 +527,6 @@ app.get('/api/material-purchases', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch purchases' });
   }
 });
-
-
-
 
 
 app.listen(PORT, () => {
