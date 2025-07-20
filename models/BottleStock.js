@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const AutoIncrement = require('mongoose-sequence')(mongoose);
 
+// Bottle Stock Schema
 const bottleStockSchema = new mongoose.Schema({
   organization: { 
     type: String, 
@@ -35,7 +36,6 @@ const bottleStockSchema = new mongoose.Schema({
     required: [true, 'Selling price is required'],
     min: [0, 'Price cannot be negative']
   },
-  // Remove the batchNumber definition here - let the plugin handle it
   supplier: { 
     type: String, 
     trim: true,
@@ -45,14 +45,20 @@ const bottleStockSchema = new mongoose.Schema({
     type: String,
     trim: true,
     maxlength: [500, 'Notes cannot exceed 500 characters']
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  updatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }
 }, { timestamps: true });
 
 bottleStockSchema.plugin(AutoIncrement, {
   id: 'batch_seq',
-  inc_field: 'batchNumber',  // This will automatically create the field as Number
+  inc_field: 'batchNumber',
   start_seq: 1000,
-  prefix: 'BATCH-'           // The prefix will make it appear as "BATCH-1001" etc.
+  prefix: 'BATCH-'
 });
-
-module.exports = mongoose.model('BottleStock', bottleStockSchema);
