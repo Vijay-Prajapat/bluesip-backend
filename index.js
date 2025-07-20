@@ -17,7 +17,7 @@ const {
   RawMaterial, 
   MaterialPurchase, 
   MaterialHistory 
-} = require('../models/schemas');
+} = require('./models/Schemas');
 
 const PORT = process.env.PORT||5000;
 // 
