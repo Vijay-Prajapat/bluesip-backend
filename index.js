@@ -511,7 +511,7 @@ app.get('/api/raw-materials', async (req, res) => {
 
 app.put('/api/raw-materials/:id', async (req, res) => {
   try {
-    const { currentStock, notes, changedBy } = req.body; // Accept name
+    const { currentStock, notes, updatedBy } = req.body;
 
     const material = await RawMaterial.findById(req.params.id);
     if (!material) {
@@ -520,17 +520,17 @@ app.put('/api/raw-materials/:id', async (req, res) => {
 
     const updatedMaterial = await RawMaterial.findByIdAndUpdate(
       req.params.id,
-      { 
+      {
         currentStock,
         notes,
-        lastUpdatedBy: changedBy // Save name instead of id
+        lastUpdatedBy: updatedBy ?? 'N/A'
       },
       { new: true, runValidators: true }
     );
 
     await MaterialHistory.create({
       materialId: req.params.id,
-      changedBy, // save username
+      changedBy: updatedBy, // ✅ Must be non-null
       previousValue: material.currentStock,
       newValue: currentStock,
       notes
@@ -538,10 +538,11 @@ app.put('/api/raw-materials/:id', async (req, res) => {
 
     res.json(updatedMaterial);
   } catch (error) {
-    console.error("Failed to update raw material", error);
-    res.status(500).json({ error: 'Failed to update raw material' });
+    console.error(error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
 
 
 app.get('/api/raw-materials/:id/history', async (req, res) => {
