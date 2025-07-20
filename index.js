@@ -340,6 +340,18 @@ app.post('/api/invoices/:id/history', async (req, res) => {
   }
 });
 
+app.get('/api/invoice-history/:invoiceNo', async (req, res) => {
+  try {
+    const invoiceNo = req.params.invoiceNo;
+    const history = await InvoiceHistory.find({ invoiceNo }).sort({ date: -1 });
+    res.status(200).json(history);
+  } catch (err) {
+    console.error('Error fetching invoice history:', err);
+    res.status(500).json({ error: 'Failed to fetch invoice history' });
+  }
+});
+
+
 
 
 
