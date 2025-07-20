@@ -265,164 +265,84 @@ app.get('/api/invoices/last', async (req, res) => {
 });
 
 
-
-
-// Get all invoices - Updated response format
 app.get('/api/invoices', async (req, res) => {
   try {
     const invoices = await Invoice.find().sort({ createdAt: -1 });
-    res.status(200).json({ 
-      success: true, 
-      data: invoices,  // Ensure data is always returned
-      message: 'Invoices fetched successfully'
-    });
-  } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      data: null,
-      message: error.message 
-    });
+    res.json(invoices);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching invoices' });
   }
 });
 
-
-
-
-// Get single invoice
-app.get('/api/invoices/:id', async (req, res) => {
-  try {
-    const invoice = await Invoice.findById(req.params.id);
-    if (!invoice) {
-      return res.status(404).json({ success: false, message: 'Invoice not found' });
-    }
-    res.status(200).json({ success: true, data: invoice });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Create new invoice
-app.post('/api/invoices', async (req, res) => {
-  try {
-    // Create a dummy createdBy field since it's required in schema
-    const invoiceData = {
-      ...req.body,
-      createdBy: new mongoose.Types.ObjectId() // Generate a dummy ID
-    };
-
-    const invoice = new Invoice(invoiceData);
-    await invoice.save();
-
-    // Create history record
-    await InvoiceHistory.create({
-      invoiceId: invoice._id,
-      action: 'created',
-      newStatus: invoice.status,
-      notes: 'Invoice created'
-    });
-
-    res.status(201).json({ success: true, data: invoice });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-});
-
-// Update invoice
 app.put('/api/invoices/:id', async (req, res) => {
   try {
+    const { invoiceStatus, paymentDate, notes } = req.body;
     const oldInvoice = await Invoice.findById(req.params.id);
-    if (!oldInvoice) {
-      return res.status(404).json({ success: false, message: 'Invoice not found' });
-    }
 
     const updatedInvoice = await Invoice.findByIdAndUpdate(
       req.params.id,
-      { ...req.body, updatedAt: new Date() },
+      {
+        invoiceStatus,
+        paymentDate,
+        notes,
+        updatedAt: new Date()
+      },
       { new: true }
     );
 
-    // Track changes
-    const changes = {};
-    if (oldInvoice.status !== updatedInvoice.status) {
-      changes.status = {
-        from: oldInvoice.status,
-        to: updatedInvoice.status
-      };
-    }
-    if (oldInvoice.notes !== updatedInvoice.notes) {
-      changes.notes = {
-        from: oldInvoice.notes,
-        to: updatedInvoice.notes
-      };
-    }
-
     await InvoiceHistory.create({
       invoiceId: req.params.id,
-      action: changes.status ? 'status_changed' : 'updated',
-      changes,
-      previousStatus: oldInvoice.status,
-      newStatus: updatedInvoice.status,
-      notes: req.body.notes || 'Invoice updated'
+      action: 'status_changed',
+      previousStatus: oldInvoice.invoiceStatus,
+      newStatus: invoiceStatus,
+      notes
     });
 
-    res.status(200).json({ success: true, data: updatedInvoice });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    res.json(updatedInvoice);
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating invoice' });
   }
 });
 
-// Delete invoice
 app.delete('/api/invoices/:id', async (req, res) => {
   try {
-    const invoice = await Invoice.findById(req.params.id);
-    if (!invoice) {
-      return res.status(404).json({ success: false, message: 'Invoice not found' });
-    }
+    const invoice = await Invoice.findByIdAndDelete(req.params.id);
 
-    // Create history record
+    if (!invoice) return res.status(404).json({ message: 'Invoice not found' });
+
     await InvoiceHistory.create({
       invoiceId: req.params.id,
       action: 'deleted',
-      previousData: invoice,
+      previousStatus: invoice.invoiceStatus,
       notes: 'Invoice deleted'
     });
 
-    await Invoice.findByIdAndDelete(req.params.id);
-    res.status(200).json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.json({ message: 'Invoice deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting invoice' });
   }
 });
 
-// Get invoice history
-app.get('/api/invoices/:id/history', async (req, res) => {
+app.post('/api/invoices/:id/history', async (req, res) => {
   try {
-    const invoice = await Invoice.findById(req.params.id);
-    if (!invoice) {
-      return res.status(404).json({ success: false, message: 'Invoice not found' });
-    }
+    const { action, notes } = req.body;
 
-    const history = await InvoiceHistory.find({ invoiceId: req.params.id })
-      .sort({ timestamp: -1 });
-      
-    res.status(200).json({ success: true, data: history });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Get last invoice number
-app.get('/api/invoices/last/number', async (req, res) => {
-  try {
-    const lastInvoice = await Invoice.findOne().sort({ createdAt: -1 });
-    res.status(200).json({ 
-      success: true, 
-      data: lastInvoice ? { invoiceNo: lastInvoice.invoiceNo } : null 
+    await InvoiceHistory.create({
+      invoiceId: req.params.id,
+      action,
+      notes,
+      timestamp: new Date()
     });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+
+    res.json({ message: 'History entry recorded' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error recording history' });
   }
 });
+
+
+
+
 
 
 
