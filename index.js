@@ -264,6 +264,7 @@ app.get('/api/invoices/last', async (req, res) => {
   }
 });
 
+/***************Invoices*********************/
 
 app.get('/api/invoices', async (req, res) => {
   try {
@@ -274,10 +275,15 @@ app.get('/api/invoices', async (req, res) => {
   }
 });
 
+// In your backend (server.js or wherever your routes are defined)
 app.put('/api/invoices/:id', async (req, res) => {
   try {
     const { invoiceStatus, paymentDate, notes } = req.body;
     const oldInvoice = await Invoice.findById(req.params.id);
+
+    if (!oldInvoice) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
 
     const updatedInvoice = await Invoice.findByIdAndUpdate(
       req.params.id,
@@ -290,16 +296,22 @@ app.put('/api/invoices/:id', async (req, res) => {
       { new: true }
     );
 
-    await InvoiceHistory.create({
-      invoiceId: req.params.id,
-      action: 'status_changed',
-      previousStatus: oldInvoice.invoiceStatus,
-      newStatus: invoiceStatus,
-      notes
-    });
+    // Record history if status changed
+    if (oldInvoice.invoiceStatus !== invoiceStatus) {
+      await InvoiceHistory.create({
+        invoiceId: req.params.id,
+        invoiceNo: oldInvoice.invoiceNo, // Make sure to include invoiceNo
+        action: 'status_changed',
+        previousStatus: oldInvoice.invoiceStatus,
+        newStatus: invoiceStatus,
+        notes,
+        timestamp: new Date()
+      });
+    }
 
     res.json(updatedInvoice);
   } catch (err) {
+    console.error('Error updating invoice:', err);
     res.status(500).json({ message: 'Error updating invoice' });
   }
 });
