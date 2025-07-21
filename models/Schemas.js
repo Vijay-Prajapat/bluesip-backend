@@ -2,13 +2,6 @@ const mongoose = require('mongoose');
 const AutoIncrement = require('mongoose-sequence')(mongoose);
 
 
-bottleStockSchema.plugin(AutoIncrement, {
-  id: 'batch_seq',
-  inc_field: 'batchNumber',
-  start_seq: 1000,
-  prefix: 'BATCH-'
-});
-
 // Raw Material Schema
 const rawMaterialSchema = new mongoose.Schema({
   materialType: {
