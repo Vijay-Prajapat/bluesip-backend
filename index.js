@@ -452,94 +452,220 @@ app.get('/api/invoice-history/:invoiceNo', async (req, res) => {
 // Bottle Stock APIs
 
 
-
-// BOTTLE STOCK
-app.get("/bottle-stocks", async (req, res) => {
-  const stocks = await BottleStock.find();
-  res.send(stocks);
+app.get('/api/bottle-stocks', async (req, res) => {
+  try {
+    const stocks = await BottleStock.find();
+    res.json(stocks);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch stocks' });
+  }
 });
 
-app.post("/bottle-stocks/create", async (req, res) => {
-  const newStock = new BottleStock(req.body);
-  await newStock.save();
-  res.send(newStock);
-});
-
-app.put("/bottle-stocks/:id", async (req, res) => {
-  await BottleStock.findByIdAndUpdate(req.params.id, req.body);
-  res.send({ message: "Stock updated" });
-});
-
-app.delete("/bottle-stocks/:id", async (req, res) => {
-  await BottleStock.findByIdAndDelete(req.params.id);
-  res.send({ message: "Stock deleted" });
-});
-
-// RAW MATERIAL
-app.get("/raw-materials", async (req, res) => {
-  const materials = await RawMaterial.find();
-  res.send(materials);
-});
-
-app.put("/raw-materials/:id", async (req, res) => {
-  const existing = await RawMaterial.findById(req.params.id);
-  const history = new MaterialHistory({
-    materialId: req.params.id,
-    changedBy: req.body.changedBy || "System",
-    previousValue: existing.currentStock,
-    newValue: req.body.currentStock,
-    notes: req.body.notes || ""
-  });
-  await history.save();
-  await RawMaterial.findByIdAndUpdate(req.params.id, req.body);
-  res.send({ message: "Material updated" });
-});
-
-app.get("/raw-materials/:id/history", async (req, res) => {
-  const history = await MaterialHistory.find({ materialId: req.params.id });
-  res.send(history);
-});
-
-// PURCHASES
-app.get("/material-purchases", async (req, res) => {
-  const { startDate, endDate, view } = req.query;
-  const purchases = await MaterialPurchase.find({
-    purchaseDate: {
-      $gte: new Date(startDate),
-      $lte: new Date(endDate)
-    }
-  });
-
-  if (view === 'summary') {
-    let summary = {
-      totalPurchases: purchases.length,
-      totalCost: purchases.reduce((sum, p) => sum + p.cost, 0),
-      materials: {}
+app.post('/api/bottle-stocks', async (req, res) => {
+  try {
+    const stockData = {
+      ...req.body,
+      currentStock: Number(req.body.currentStock) || 0,
+      minStockLevel: Number(req.body.minStockLevel) || 10,
+      sellingPrice: Number(req.body.sellingPrice) || 0
     };
 
-    purchases.forEach(p => {
-      if (!summary.materials[p.materialType]) {
-        summary.materials[p.materialType] = {
-          count: 0,
-          quantity: 0,
-          cost: 0
-        };
-      }
-      summary.materials[p.materialType].count++;
-      summary.materials[p.materialType].quantity += p.quantity;
-      summary.materials[p.materialType].cost += p.cost;
-    });
-
-    return res.send({ purchases, summary });
+    const stock = new BottleStock(stockData);
+    await stock.save();
+    res.status(201).json(stock);
+  } catch (err) {
+    if (err.name === 'ValidationError') {
+      const errors = {};
+      Object.keys(err.errors).forEach(key => {
+        errors[key] = err.errors[key].message;
+      });
+      return res.status(400).json({ errors });
+    }
+    res.status(400).json({ error: err.message });
   }
-
-  res.send({ purchases });
 });
 
-app.post("/material-purchases", async (req, res) => {
-  const purchase = new MaterialPurchase(req.body);
-  await purchase.save();
-  res.send(purchase);
+app.put('/api/bottle-stocks/:id', async (req, res) => {
+  try {
+    const updatedStock = await BottleStock.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    res.json(updatedStock);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/bottle-stocks/:id', async (req, res) => {
+  try {
+    const stock = await BottleStock.findByIdAndDelete(req.params.id);
+    if (!stock) return res.status(404).json({ error: 'Stock not found' });
+    res.json({ message: 'Stock deleted' });
+  } catch (err) {
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
+// Raw Material APIs
+app.get('/api/raw-materials', async (req, res) => {
+  try {
+    const materials = await RawMaterial.find();
+    res.json(materials);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch raw materials' });
+  }
+});
+
+app.post('/api/raw-materials', async (req, res) => {
+  try {
+    const material = new RawMaterial(req.body);
+    await material.save();
+    res.status(201).json(material);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/raw-materials/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quantity, changeType, notes, userId, userName } = req.body;
+
+    const material = await RawMaterial.findById(id);
+    if (!material) return res.status(404).json({ error: 'Material not found' });
+
+    const previousValue = material.currentStock;
+    let newValue;
+
+    if (changeType === 'Stock Update') {
+      newValue = quantity;
+    } else if (changeType === 'Restock') {
+      newValue = previousValue + quantity;
+    } else if (changeType === 'Consumption') {
+      newValue = previousValue - quantity;
+      if (newValue < 0) {
+        return res.status(400).json({ error: 'Insufficient stock' });
+      }
+    } else {
+      return res.status(400).json({ error: 'Invalid change type' });
+    }
+
+    material.currentStock = newValue;
+    material.lastUpdated = new Date();
+    material.updatedBy = userId;
+    await material.save();
+
+    // Record history
+    const history = new RawMaterialHistory({
+      materialId: id,
+      changedBy: userId,
+      changedByName: userName,
+      previousValue,
+      newValue,
+      changeType,
+      notes
+    });
+    await history.save();
+
+    res.json(material);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/raw-materials/:id/history', async (req, res) => {
+  try {
+    const history = await RawMaterialHistory.find({ materialId: req.params.id })
+      .sort({ createdAt: -1 })
+      .populate('changedBy', 'name');
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
+// Purchase Calendar APIs
+app.post('/api/purchases', async (req, res) => {
+  try {
+    const { materialType, quantity, costPerUnit, companyName, purchasedBy, purchasedByName, notes } = req.body;
+    
+    const purchase = new PurchaseCalendar({
+      purchaseDate: new Date(),
+      materialType,
+      quantity,
+      costPerUnit,
+      totalCost: quantity * costPerUnit,
+      companyName: materialType === 'Company Label' ? companyName : undefined,
+      purchasedBy,
+      purchasedByName,
+      notes
+    });
+    
+    await purchase.save();
+    
+    // Update raw material stock
+    const material = await RawMaterial.findOne({ materialType });
+    if (material) {
+      material.currentStock += quantity;
+      material.lastUpdated = new Date();
+      material.updatedBy = purchasedBy;
+      await material.save();
+      
+      // Record history
+      const history = new RawMaterialHistory({
+        materialId: material._id,
+        changedBy: purchasedBy,
+        changedByName: purchasedByName,
+        previousValue: material.currentStock - quantity,
+        newValue: material.currentStock,
+        changeType: 'Restock',
+        notes: `Purchased ${quantity} units via calendar`
+      });
+      await history.save();
+    }
+    
+    res.status(201).json(purchase);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/purchases', async (req, res) => {
+  try {
+    const { startDate, endDate, view } = req.query;
+    let query = {};
+    
+    if (startDate && endDate) {
+      query.purchaseDate = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    }
+    
+    const purchases = await PurchaseCalendar.find(query).sort({ purchaseDate: -1 });
+    
+    if (view === 'summary') {
+      const summary = purchases.reduce((acc, purchase) => {
+        if (!acc[purchase.materialType]) {
+          acc[purchase.materialType] = {
+            totalQuantity: 0,
+            totalCost: 0
+          };
+        }
+        acc[purchase.materialType].totalQuantity += purchase.quantity;
+        acc[purchase.materialType].totalCost += purchase.totalCost;
+        return acc;
+      }, {});
+      
+      res.json({ purchases, summary });
+    } else {
+      res.json(purchases);
+    }
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch purchases' });
+  }
 });
 
 app.listen(PORT, () => {

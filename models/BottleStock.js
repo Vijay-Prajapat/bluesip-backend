@@ -45,22 +45,6 @@ const bottleStockSchema = new mongoose.Schema({
     type: String,
     trim: true,
     maxlength: [500, 'Notes cannot exceed 500 characters']
-  },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
-  updatedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
   }
 }, { timestamps: true });
-
-bottleStockSchema.plugin(AutoIncrement, {
-  id: 'batch_seq',
-  inc_field: 'batchNumber',
-  start_seq: 1000,
-  prefix: 'BATCH-'
-});
-
 module.exports = mongoose.model('BottleStock', bottleStockSchema);
