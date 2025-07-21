@@ -450,6 +450,30 @@ app.get('/api/invoice-history/:invoiceNo', async (req, res) => {
 /**************************Stock-Management*********************/
 // Bottle Stock APIs
 
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here';
+
+// Authentication Middleware
+const authMiddleware = (req, res, next) => {
+  try {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = {
+      id: decoded.id,
+      name: decoded.name || 'System'
+    };
+    next();
+  } catch (error) {
+    console.error('Authentication error:', error);
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// Helper function for error handling
 const handleError = (res, error, defaultMessage = 'An error occurred') => {
   console.error(error);
   res.status(500).json({ 
@@ -640,6 +664,11 @@ app.post('/api/material-purchases', authMiddleware, async (req, res) => {
   }
 });
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Something broke!' });
+});
 
 
 app.listen(PORT, () => {
