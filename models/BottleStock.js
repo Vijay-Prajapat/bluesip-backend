@@ -1,7 +1,5 @@
 const mongoose = require('mongoose');
-const AutoIncrement = require('mongoose-sequence')(mongoose);
 
-// Bottle Stock Schema
 const bottleStockSchema = new mongoose.Schema({
   organization: { 
     type: String, 
@@ -45,6 +43,14 @@ const bottleStockSchema = new mongoose.Schema({
     type: String,
     trim: true,
     maxlength: [500, 'Notes cannot exceed 500 characters']
+  },
+  createdBy: {
+    type: String,
+    required: true
+  },
+  updatedBy: {
+    type: String
   }
 }, { timestamps: true });
+
 module.exports = mongoose.model('BottleStock', bottleStockSchema);

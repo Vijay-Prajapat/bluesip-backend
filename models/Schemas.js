@@ -1,8 +1,5 @@
 const mongoose = require('mongoose');
-const AutoIncrement = require('mongoose-sequence')(mongoose);
 
-
-// Raw Material Schema
 const rawMaterialSchema = new mongoose.Schema({
   materialType: {
     type: String,
@@ -21,6 +18,11 @@ const rawMaterialSchema = new mongoose.Schema({
     min: 1,
     default: 500
   },
+  unit: {
+    type: String,
+    required: true,
+    default: 'pieces'
+  },
   costPerUnit: {
     type: Number,
     required: true,
@@ -33,57 +35,17 @@ const rawMaterialSchema = new mongoose.Schema({
     },
     trim: true
   },
-  lastUpdated: {
-    type: Date,
-    default: Date.now
-  },
-  updatedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }
-}, { timestamps: true });
-
-// Raw Material History Schema
-const rawMaterialHistorySchema = new mongoose.Schema({
-  materialId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'RawMaterial',
-    required: true
-  },
-  changedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  changedByName: {
-    type: String,
-    required: true
-  },
-  previousValue: {
-    type: Number,
-    required: true
-  },
-  newValue: {
-    type: Number,
-    required: true
-  },
-  changeType: {
-    type: String,
-    enum: ['Stock Update', 'Restock', 'Consumption'],
-    required: true
-  },
   notes: {
     type: String,
     trim: true
+  },
+  lastUpdatedBy: {
+    type: String,
+    required: true
   }
 }, { timestamps: true });
 
-// Purchase Calendar Schema
-const purchaseCalendarSchema = new mongoose.Schema({
-  purchaseDate: {
-    type: Date,
-    required: true
-  },
+const materialPurchaseSchema = new mongoose.Schema({
   materialType: {
     type: String,
     required: true,
@@ -94,15 +56,19 @@ const purchaseCalendarSchema = new mongoose.Schema({
     required: true,
     min: 1
   },
-  costPerUnit: {
+  purchaseDate: {
+    type: Date,
+    required: true,
+    default: Date.now
+  },
+  cost: {
     type: Number,
     required: true,
     min: 0
   },
-  totalCost: {
-    type: Number,
-    required: true,
-    min: 0
+  supplier: {
+    type: String,
+    trim: true
   },
   companyName: {
     type: String,
@@ -112,28 +78,51 @@ const purchaseCalendarSchema = new mongoose.Schema({
     trim: true
   },
   purchasedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: String,
     required: true
   },
-  purchasedByName: {
+  notes: {
     type: String,
+    trim: true,
+    maxlength: 500
+  }
+});
+
+const materialHistorySchema = new mongoose.Schema({
+  materialId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    ref: 'RawMaterial'
+  },
+  changedBy: {
+    type: String,
+    required: true
+  },
+  changeDate: {
+    type: Date,
+    required: true,
+    default: Date.now
+  },
+  previousValue: {
+    type: Number,
+    required: true
+  },
+  newValue: {
+    type: Number,
     required: true
   },
   notes: {
     type: String,
     trim: true
   }
-}, { timestamps: true });
-
+});
 
 const RawMaterial = mongoose.model('RawMaterial', rawMaterialSchema);
-const RawMaterialHistory = mongoose.model('RawMaterialHistory', rawMaterialHistorySchema);
-const PurchaseCalendar = mongoose.model('PurchaseCalendar', purchaseCalendarSchema);
+const MaterialPurchase = mongoose.model('MaterialPurchase', materialPurchaseSchema);
+const MaterialHistory = mongoose.model('MaterialHistory', materialHistorySchema);
 
 module.exports = {
-
   RawMaterial,
-  RawMaterialHistory,
-  PurchaseCalendar
+  MaterialPurchase,
+  MaterialHistory
 };
