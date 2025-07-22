@@ -663,41 +663,6 @@ app.post('/api/material-purchases', authMiddleware, async (req, res) => {
     handleError(res, error, 'Failed to record material purchase');
   }
 });
-/* 1. Top-50 recent purchases (new) */
-app.get('/api/material-purchases/recent', authMiddleware, async (req, res) => {
-  try {
-    const purchases = await MaterialPurchase.find()
-      .sort({ purchaseDate: -1 })
-      .limit(50);
-    res.json(purchases);
-  } catch (err) {
-    handleError(res, err, 'Failed to fetch recent purchases');
-  }
-});
-
-/* 2. Transport-expense CRUD */
-app.get('/api/transport-expenses', authMiddleware, async (req, res) => {
-  try {
-    const expenses = await TransportExpense.find()
-      .sort({ expenseDate: -1 })
-      .limit(50);
-    res.json(expenses);
-  } catch (err) {
-    handleError(res, err, 'Failed to fetch transport expenses');
-  }
-});
-
-app.post('/api/transport-expenses', authMiddleware, async (req, res) => {
-  try {
-    const expense = await TransportExpense.create({
-      ...req.body,
-      recordedBy: req.user.name
-    });
-    res.status(201).json(expense);
-  } catch (err) {
-    handleError(res, err, 'Failed to record transport expense');
-  }
-});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
