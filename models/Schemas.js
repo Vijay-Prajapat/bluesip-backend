@@ -116,13 +116,23 @@ const materialHistorySchema = new mongoose.Schema({
     trim: true
   }
 });
+const transportExpenseSchema = new mongoose.Schema({
+  amount: { type: Number, required: true, min: 0 },
+  expenseDate: { type: Date, required: true, default: Date.now },
+  description: { type: String, required: true },
+  notes: String,
+  recordedBy: String,
+  createdAt: { type: Date, default: Date.now }
+});
+
 
 const RawMaterial = mongoose.model('RawMaterial', rawMaterialSchema);
 const MaterialPurchase = mongoose.model('MaterialPurchase', materialPurchaseSchema);
 const MaterialHistory = mongoose.model('MaterialHistory', materialHistorySchema);
-
+const  TransportExpense=  mongoose.model('TransportExpense', transportExpenseSchema);
 module.exports = {
   RawMaterial,
   MaterialPurchase,
-  MaterialHistory
+  MaterialHistory,
+  TransportExpense
 };
