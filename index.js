@@ -697,7 +697,7 @@ app.post('/api/transport-expenses', authMiddleware, async (req, res) => {
   } catch (err) {
     handleError(res, err, 'Failed to record transport expense');
   }
-// });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
