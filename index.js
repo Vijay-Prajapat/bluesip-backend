@@ -645,24 +645,35 @@ app.post('/api/material-purchases', authMiddleware, async (req, res) => {
       ...req.body,
       purchasedBy: req.user.name
     };
-    
+
     const newPurchase = await MaterialPurchase.create(purchaseData);
-    
-    // Update the raw material stock
-    const materialType = req.body.materialType;
-    const quantity = req.body.quantity;
-    
-    await RawMaterial.findOneAndUpdate(
-      { materialType, ...(materialType === 'Company Label' ? { companyName: req.body.companyName } : {}) },
-      { $inc: { currentStock: quantity } },
-      { new: true }
-    );
-    
+
+    const { materialType, quantity } = req.body;
+
+    const updateQuery = {
+      materialType,
+      ...(materialType === 'Company Label' ? { companyName: req.body.companyName } : {})
+    };
+
+    const updateData = {
+      $inc: { currentStock: quantity },
+      $setOnInsert: {
+        costPerUnit: 0,
+        unit: 'pieces',
+        minStockLevel: 500,
+        lastUpdatedBy: req.user.name
+      }
+    };
+
+    await RawMaterial.findOneAndUpdate(updateQuery, updateData, { new: true, upsert: true });
+
     res.status(201).json(newPurchase);
   } catch (error) {
+    console.error(error);
     handleError(res, error, 'Failed to record material purchase');
   }
 });
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
