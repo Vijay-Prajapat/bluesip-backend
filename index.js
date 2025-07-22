@@ -675,6 +675,28 @@ app.post('/api/material-purchases', authMiddleware, async (req, res) => {
 });
 
 
+// Returns the 50 most recent material updates
+app.get('/api/material-history/recent', authMiddleware, async (req, res) => {
+  try {
+    const updates = await MaterialHistory.find()
+      .sort({ changeDate: -1 })
+      .limit(50)
+      .populate('materialId', 'materialType companyName');
+    
+    // Format the response to include material type and company name
+    const formattedUpdates = updates.map(update => ({
+      ...update.toObject(),
+      materialType: update.materialId.materialType,
+      companyName: update.materialId.companyName
+    }));
+
+    res.json(formattedUpdates);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch recent updates' });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
