@@ -646,15 +646,16 @@ app.get('/api/material-purchases', authMiddleware, async (req, res) => {
     
     let query = {};
     
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999); // Ensure full day included
+ if (startDate && endDate) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999); // include the whole end day
 
-      console.log("Date Range Filter:", { start, end }); // Debug
-
-      query.purchaseDate = { $gte: start, $lte: end };
-    } else {
+  query.purchaseDate = {
+    $gte: start,
+    $lte: end
+  };
+} else {
       console.log("No date filter applied. Fetching all data.");
     }
 
