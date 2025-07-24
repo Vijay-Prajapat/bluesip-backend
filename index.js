@@ -648,12 +648,28 @@ app.post('/api/material-purchases', authMiddleware, async (req, res) => {
 
     const newPurchase = await MaterialPurchase.create(purchaseData);
 
-    const { materialType, quantity } = req.body;
+    const { materialType, quantity, notes = 'Material purchased' } = req.body;
 
     const updateQuery = {
       materialType,
       ...(materialType === 'Company Label' ? { companyName: req.body.companyName } : {})
     };
+
+    const existingMaterial = await RawMaterial.findOne(updateQuery);
+
+    let previousValue = 0;
+    if (existingMaterial) {
+      previousValue = existingMaterial.currentStock;
+    }
+
+    // Create history record before updating stock
+    await MaterialHistory.create({
+      materialId: existingMaterial?._id,
+      changedBy: req.user.name,
+      previousValue,
+      newValue: previousValue + quantity,
+      notes
+    });
 
     const updateData = {
       $inc: { currentStock: quantity },
@@ -673,6 +689,7 @@ app.post('/api/material-purchases', authMiddleware, async (req, res) => {
     handleError(res, error, 'Failed to record material purchase');
   }
 });
+
 
 
 // Returns the 50 most recent material updates
