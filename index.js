@@ -592,23 +592,76 @@ app.get('/api/raw-materials/:id/history', authMiddleware, async (req, res) => {
   }
 });
 
+// // Material Purchase APIs
+// app.get('/api/material-purchases', authMiddleware, async (req, res) => {
+//   try {
+//     const { startDate, endDate, view } = req.query;
+    
+//     let query = {};
+//     if (startDate && endDate) {
+//       query.purchaseDate = {
+//         $gte: new Date(startDate),
+//         $lte: new Date(endDate)
+//       };
+//     }
+    
+//     if (view === 'summary') {
+//       const purchases = await MaterialPurchase.find(query);
+      
+//       // Calculate summary
+//       const summary = {
+//         totalPurchases: purchases.length,
+//         totalCost: purchases.reduce((sum, p) => sum + p.cost, 0),
+//         materials: {}
+//       };
+      
+//       purchases.forEach(purchase => {
+//         if (!summary.materials[purchase.materialType]) {
+//           summary.materials[purchase.materialType] = {
+//             count: 0,
+//             quantity: 0,
+//             cost: 0
+//           };
+//         }
+        
+//         summary.materials[purchase.materialType].count += 1;
+//         summary.materials[purchase.materialType].quantity += purchase.quantity;
+//         summary.materials[purchase.materialType].cost += purchase.cost;
+//       });
+      
+//       return res.json({ purchases, summary });
+//     }
+    
+//     const purchases = await MaterialPurchase.find(query).sort({ purchaseDate: -1 });
+//     res.json({ purchases });
+//   } catch (error) {
+//     handleError(res, error, 'Failed to fetch material purchases');
+//   }
+// });
+
 // Material Purchase APIs
 app.get('/api/material-purchases', authMiddleware, async (req, res) => {
   try {
     const { startDate, endDate, view } = req.query;
     
     let query = {};
-    if (startDate && endDate) {
-      query.purchaseDate = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      };
-    }
     
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // Ensure full day included
+
+      console.log("Date Range Filter:", { start, end }); // Debug
+
+      query.purchaseDate = { $gte: start, $lte: end };
+    } else {
+      console.log("No date filter applied. Fetching all data.");
+    }
+
+    // Handle summary view
     if (view === 'summary') {
       const purchases = await MaterialPurchase.find(query);
       
-      // Calculate summary
       const summary = {
         totalPurchases: purchases.length,
         totalCost: purchases.reduce((sum, p) => sum + p.cost, 0),
@@ -623,7 +676,7 @@ app.get('/api/material-purchases', authMiddleware, async (req, res) => {
             cost: 0
           };
         }
-        
+
         summary.materials[purchase.materialType].count += 1;
         summary.materials[purchase.materialType].quantity += purchase.quantity;
         summary.materials[purchase.materialType].cost += purchase.cost;
@@ -631,13 +684,16 @@ app.get('/api/material-purchases', authMiddleware, async (req, res) => {
       
       return res.json({ purchases, summary });
     }
-    
+
+    // Return all purchases (normal list)
     const purchases = await MaterialPurchase.find(query).sort({ purchaseDate: -1 });
     res.json({ purchases });
+
   } catch (error) {
     handleError(res, error, 'Failed to fetch material purchases');
   }
 });
+
 
 app.post('/api/material-purchases', authMiddleware, async (req, res) => {
   try {
