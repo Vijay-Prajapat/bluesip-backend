@@ -781,7 +781,7 @@ app.use((err, req, res, next) => {
 
 /**************comapny label*************** */
 
-router.get('/company-labels', async (req, res) => {
+app.get('/company-labels', async (req, res) => {
   const { stockLevel, search } = req.query;
 
   const filter = {};
@@ -795,7 +795,7 @@ router.get('/company-labels', async (req, res) => {
 });
 
 // Update label
-router.put('/company-label/:id', authMiddleware, async (req, res) => {
+app.put('/company-label/:id', authMiddleware, async (req, res) => {
   const label = await CompanyLabel.findByIdAndUpdate(req.params.id, req.body, { new: true });
   await CompanyLabelHistory.create({
     labelId: label._id,
@@ -806,7 +806,7 @@ router.put('/company-label/:id', authMiddleware, async (req, res) => {
 });
 
 // Delete label
-router.delete('/company-label/:id', authMiddleware, async (req, res) => {
+applyDefaults.delete('/company-label/:id', authMiddleware, async (req, res) => {
   const label = await CompanyLabel.findByIdAndDelete(req.params.id);
   await CompanyLabelHistory.create({
     labelId: label._id,
