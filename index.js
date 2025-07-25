@@ -806,7 +806,7 @@ app.put('/company-label/:id', authMiddleware, async (req, res) => {
 });
 
 // Delete label
-applyDefaults.delete('/company-label/:id', authMiddleware, async (req, res) => {
+app.delete('/company-label/:id', authMiddleware, async (req, res) => {
   const label = await CompanyLabel.findByIdAndDelete(req.params.id);
   await CompanyLabelHistory.create({
     labelId: label._id,
