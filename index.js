@@ -781,40 +781,172 @@ app.use((err, req, res, next) => {
 
 /**************comapny label*************** */
 
-app.get('/company-labels', async (req, res) => {
-  const { stockLevel, search } = req.query;
-
-  const filter = {};
-  if (search) filter.labelName = { $regex: search, $options: 'i' };
-  if (stockLevel === 'low') filter.stock = { $lt: 50 };
-  else if (stockLevel === 'medium') filter.stock = { $gte: 50, $lt: 200 };
-  else if (stockLevel === 'high') filter.stock = { $gte: 200 };
-
-  const labels = await CompanyLabel.find(filter).sort({ labelName: 1 });
-  res.json(labels);
+app.get('/api/company-labels', authMiddleware, async (req, res) => {
+  try {
+    const { search, minStock, maxStock } = req.query;
+    
+    const query = {};
+    
+    if (search) {
+      query.labelName = { $regex: search, $options: 'i' };
+    }
+    
+    if (minStock || maxStock) {
+      query.stock = {};
+      if (minStock) query.stock.$gte = Number(minStock);
+      if (maxStock) query.stock.$lte = Number(maxStock);
+    }
+    
+    const labels = await CompanyLabel.find(query).sort({ labelName: 1 });
+    res.json(labels);
+  } catch (error) {
+    console.error(error);
+    handleError(res, error, 'Failed to fetch company labels');
+  }
 });
 
-// Update label
-app.put('/company-label/:id', authMiddleware, async (req, res) => {
-  const label = await CompanyLabel.findByIdAndUpdate(req.params.id, req.body, { new: true });
-  await CompanyLabelHistory.create({
-    labelId: label._id,
-    action: 'update',
-    userName: req.user.name
-  });
-  res.json(label);
+app.post('/api/company-labels', authMiddleware, async (req, res) => {
+  try {
+    const { labelName, stock } = req.body;
+    
+    if (!labelName) {
+      return res.status(400).json({ message: 'Label name is required' });
+    }
+    
+    const existingLabel = await CompanyLabel.findOne({ labelName });
+    if (existingLabel) {
+      return res.status(400).json({ message: 'Label with this name already exists' });
+    }
+    
+    const newLabel = await CompanyLabel.create({
+      labelName,
+      stock: stock || 0
+    });
+    
+    // Create history record
+    await CompanyLabelHistory.create({
+      labelId: newLabel._id,
+      action: 'create',
+      userName: req.user.name
+    });
+    
+    res.status(201).json(newLabel);
+  } catch (error) {
+    console.error(error);
+    handleError(res, error, 'Failed to create company label');
+  }
 });
 
-// Delete label
-app.delete('/company-label/:id', authMiddleware, async (req, res) => {
-  const label = await CompanyLabel.findByIdAndDelete(req.params.id);
-  await CompanyLabelHistory.create({
-    labelId: label._id,
-    action: 'delete',
-    userName: req.user.name
-  });
-  res.json({ message: 'Deleted' });
+app.put('/api/company-labels/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { labelName, stock } = req.body;
+    
+    const label = await CompanyLabel.findById(id);
+    if (!label) {
+      return res.status(404).json({ message: 'Company label not found' });
+    }
+    
+    // Check if label name is being changed to an existing name
+    if (labelName && labelName !== label.labelName) {
+      const existingLabel = await CompanyLabel.findOne({ labelName });
+      if (existingLabel) {
+        return res.status(400).json({ message: 'Label with this name already exists' });
+      }
+    }
+    
+    // Create history record before update
+    await CompanyLabelHistory.create({
+      labelId: id,
+      action: 'update',
+      userName: req.user.name,
+      previousValues: {
+        labelName: label.labelName,
+        stock: label.stock
+      }
+    });
+    
+    const updatedLabel = await CompanyLabel.findByIdAndUpdate(
+      id,
+      {
+        labelName: labelName || label.labelName,
+        stock: stock !== undefined ? stock : label.stock
+      },
+      { new: true }
+    );
+    
+    res.json(updatedLabel);
+  } catch (error) {
+    console.error(error);
+    handleError(res, error, 'Failed to update company label');
+  }
 });
+
+app.delete('/api/company-labels/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const label = await CompanyLabel.findById(id);
+    if (!label) {
+      return res.status(404).json({ message: 'Company label not found' });
+    }
+    
+    // Create history record before deletion
+    await CompanyLabelHistory.create({
+      labelId: id,
+      action: 'delete',
+      userName: req.user.name,
+      previousValues: {
+        labelName: label.labelName,
+        stock: label.stock
+      }
+    });
+    
+    await CompanyLabel.findByIdAndDelete(id);
+    
+    res.json({ message: 'Company label deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    handleError(res, error, 'Failed to delete company label');
+  }
+});
+
+app.get('/api/company-labels/:id/history', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const history = await CompanyLabelHistory.find({ labelId: id })
+      .sort({ timestamp: -1 })
+      .populate('labelId', 'labelName');
+    
+    res.json(history);
+  } catch (error) {
+    console.error(error);
+    handleError(res, error, 'Failed to fetch label history');
+  }
+});
+
+app.get('/api/company-labels/search-suggestions', authMiddleware, async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query) {
+      return res.json([]);
+    }
+    
+    const suggestions = await CompanyLabel.find({
+      labelName: { $regex: query, $options: 'i' }
+    })
+    .limit(10)
+    .select('labelName stock');
+    
+    res.json(suggestions);
+  } catch (error) {
+    console.error(error);
+    handleError(res, error, 'Failed to fetch search suggestions');
+  }
+});
+
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
