@@ -16,7 +16,9 @@ const BottleStock  = require('./models/BottleStock');
 const {  
   RawMaterial, 
   MaterialPurchase, 
-  MaterialHistory 
+  MaterialHistory,
+  CompanyLabelHistory,
+  CompanyLabel 
 } = require('./models/Schemas');
 
 const PORT = process.env.PORT||5000;
@@ -777,6 +779,42 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something broke!' });
 });
 
+/**************comapny label*************** */
+
+router.get('/company-labels', async (req, res) => {
+  const { stockLevel, search } = req.query;
+
+  const filter = {};
+  if (search) filter.labelName = { $regex: search, $options: 'i' };
+  if (stockLevel === 'low') filter.stock = { $lt: 50 };
+  else if (stockLevel === 'medium') filter.stock = { $gte: 50, $lt: 200 };
+  else if (stockLevel === 'high') filter.stock = { $gte: 200 };
+
+  const labels = await CompanyLabel.find(filter).sort({ labelName: 1 });
+  res.json(labels);
+});
+
+// Update label
+router.put('/company-label/:id', authMiddleware, async (req, res) => {
+  const label = await CompanyLabel.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  await CompanyLabelHistory.create({
+    labelId: label._id,
+    action: 'update',
+    userName: req.user.name
+  });
+  res.json(label);
+});
+
+// Delete label
+router.delete('/company-label/:id', authMiddleware, async (req, res) => {
+  const label = await CompanyLabel.findByIdAndDelete(req.params.id);
+  await CompanyLabelHistory.create({
+    labelId: label._id,
+    action: 'delete',
+    userName: req.user.name
+  });
+  res.json({ message: 'Deleted' });
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

@@ -126,6 +126,42 @@ const transportExpenseSchema = new mongoose.Schema({
 });
 
 
+
+const companyLabelHistorySchema = new mongoose.Schema({
+  labelId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'CompanyLabel',
+    required: true
+  },
+  action: {
+    type: String,
+    enum: ['create', 'update', 'delete'],
+    required: true
+  },
+  userName: {
+    type: String,
+    required: true
+  },
+  timestamp: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+
+const companyLabelSchema = new mongoose.Schema({
+  labelName: {
+    type: String,
+    required: true
+  },
+  stock: {
+    type: Number,
+    default: 0
+  }
+});
+
+const CompanyLabel= mongoose.model('CompanyLabel', companyLabelSchema);
+const CompanyLabelHistory= mongoose.model('CompanyLabelHistory', companyLabelHistorySchema);
 const RawMaterial = mongoose.model('RawMaterial', rawMaterialSchema);
 const MaterialPurchase = mongoose.model('MaterialPurchase', materialPurchaseSchema);
 const MaterialHistory = mongoose.model('MaterialHistory', materialHistorySchema);
@@ -134,5 +170,9 @@ module.exports = {
   RawMaterial,
   MaterialPurchase,
   MaterialHistory,
-  TransportExpense
+  TransportExpense,
+  CompanyLabelHistory,
+  CompanyLabel
+  
+
 };
