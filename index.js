@@ -84,13 +84,59 @@ passport.use(
 
 passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser((id, done) => User.findById(id, (err, user) => done(err, user)));
-
 app.post("/register", async (req, res) => {
-  const { name, email, password } = req.body;
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const user = new User({ name, email, password: hashedPassword });
-  await user.save();
-  res.send({ success: true });
+  try {
+    const { name, email, password, role } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !password || !role) {
+      return res.status(400).json({ 
+        success: false,
+        message: "All fields are required" 
+      });
+    }
+
+    // Validate role
+    if (!['admin', 'staffhead', 'staff'].includes(role)) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid role specified" 
+      });
+    }
+
+    // Check if email already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Email already in use" 
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // Create new user
+    const user = new User({ 
+      name, 
+      email, 
+      password: hashedPassword,
+      role 
+    });
+    
+    await user.save();
+    
+    res.status(201).json({ 
+      success: true,
+      message: "User registered successfully"
+    });
+  } catch (error) {
+    console.error("Registration error:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Internal server error" 
+    });
+  }
 });
 
 // app.post("/login", passport.authenticate("local"), (req, res) => {
@@ -122,7 +168,7 @@ app.get("/auth/google/callback", passport.authenticate("google", { failureRedire
 
 app.get("/api/users/:id", async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select("name email");
+    const user = await User.findById(req.params.id).select("name email role");
     if (!user) return res.status(404).json({ error: "User not found" });
 
     res.json(user);
@@ -932,7 +978,189 @@ app.get('/api/company-labels/:id/history', authMiddleware, async (req, res) => {
   }
 });
 
+/*****************************Register user */
+// Get all users (admin only)
+app.get('/api/users', authMiddleware, async (req, res) => {
+  try {
+    // Check if user is admin
+    const requestingUser = await User.findById(req.user.id);
+    if (!requestingUser || requestingUser.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
 
+    const users = await User.find({}, '-password -__v');
+    res.json(users);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Register new user (admin only)
+app.post('/api/register', authMiddleware, async (req, res) => {
+  try {
+    // Check if user is admin
+    const requestingUser = await User.findById(req.user.id);
+    if (!requestingUser || requestingUser.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { name, email, password, role } = req.body;
+
+    // Validate input
+    if (!name || !email || !password || !role) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email already in use' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create new user
+    const newUser = new User({
+      name,
+      email,
+      password: hashedPassword,
+      role
+    });
+
+    await newUser.save();
+
+    // Return user without password
+    const userToReturn = newUser.toObject();
+    delete userToReturn.password;
+    delete userToReturn.__v;
+
+    res.status(201).json({ 
+      message: 'User registered successfully',
+      user: userToReturn
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+// Update user (admin only)
+app.put('/api/users/:id', authMiddleware, async (req, res) => {
+  try {
+    // Check if user is admin
+    const requestingUser = await User.findById(req.user.id);
+    if (!requestingUser || requestingUser.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { id } = req.params;
+    const { name, email, role } = req.body;
+
+    // Validate input
+    if (!name || !email || !role) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Check if user exists
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Update user
+    user.name = name;
+    user.email = email;
+    user.role = role;
+
+    await user.save();
+
+    // Return updated user without password
+    const userToReturn = user.toObject();
+    delete userToReturn.password;
+    delete userToReturn.__v;
+
+    res.json({ 
+      message: 'User updated successfully',
+      user: userToReturn
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Update failed' });
+  }
+});
+
+// Change user password (admin only)
+app.put('/api/users/:id/password', authMiddleware, async (req, res) => {
+  try {
+    // Check if user is admin
+    const requestingUser = await User.findById(req.user.id);
+    if (!requestingUser || requestingUser.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    // Validate input
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Check if user exists
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+
+    await user.save();
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Password change failed' });
+  }
+});
+
+// Delete user (admin only)
+app.delete('/api/users/:id', authMiddleware, async (req, res) => {
+  try {
+    // Check if user is admin
+    const requestingUser = await User.findById(req.user.id);
+    if (!requestingUser || requestingUser.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { id } = req.params;
+
+    // Prevent deletion of self
+    if (id === req.user.id) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+
+    // Check if user exists
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Prevent deletion of other admins
+    if (user.role === 'admin') {
+      return res.status(403).json({ error: 'Cannot delete admin accounts' });
+    }
+
+    await User.findByIdAndDelete(id);
+
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    // res.status(500).json({ error: 'Deletion failed' });
+  }
+});
 
 
 
