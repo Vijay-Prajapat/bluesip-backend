@@ -1187,8 +1187,25 @@ app.get('/calendar', async (req, res) => {
         ]
       }
     }).lean();
+    // Calculate summary
+    const summary = {
+      totalInvoices: invoices.length,
+      totalAmount: invoices.reduce((sum, inv) => sum + inv.grandTotal, 0),
+      paidAmount: invoices.filter(i => i.invoiceStatus === 'paid')
+                         .reduce((sum, inv) => sum + inv.grandTotal, 0),
+      pendingAmount: invoices.filter(i => i.invoiceStatus === 'pending')
+                           .reduce((sum, inv) => sum + inv.grandTotal, 0),
+      statusCounts: invoices.reduce((acc, inv) => {
+        const status = inv.invoiceStatus;
+        if (!acc[status]) {
+          acc[status] = { count: 0, amount: 0 };
+        }
+        acc[status].count += 1;
+        acc[status].amount += inv.grandTotal;
+        return acc;
+      }, {})
+    };
 
-    // Rest of your summary calculation...
     res.json({ invoices, summary });
   } catch (error) {
     res.status(500).json({ error: error.message });
