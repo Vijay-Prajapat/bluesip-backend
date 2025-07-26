@@ -1166,7 +1166,7 @@ app.delete('/api/users/:id', authMiddleware, async (req, res) => {
 /************************************Calendar *******************/
 
 // In your invoice routes file
-router.get('/calendar', async (req, res) => {
+app.get('/calendar', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     
