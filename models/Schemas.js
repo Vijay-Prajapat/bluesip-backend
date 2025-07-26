@@ -126,7 +126,6 @@ const transportExpenseSchema = new mongoose.Schema({
 });
 
 
-
 const companyLabelHistorySchema = new mongoose.Schema({
   labelId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -142,26 +141,38 @@ const companyLabelHistorySchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  previousStock: Number,
+  newStock: Number,
   timestamp: {
     type: Date,
     default: Date.now
   }
 });
 
-
 const companyLabelSchema = new mongoose.Schema({
   labelName: {
     type: String,
-    required: true
+    required: true,
+    unique: true
   },
   stock: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
+  },
+  minStockLevel: {
+    type: Number,
+    default: 100,
+    min: 0
+  },
+  lastUpdatedBy: {
+    type: String,
+    required: true
   }
-});
+}, { timestamps: true });
 
-const CompanyLabel= mongoose.model('CompanyLabel', companyLabelSchema);
-const CompanyLabelHistory= mongoose.model('CompanyLabelHistory', companyLabelHistorySchema);
+const CompanyLabel = mongoose.model('CompanyLabel', companyLabelSchema);
+const CompanyLabelHistory = mongoose.model('CompanyLabelHistory', companyLabelHistorySchema);
 const RawMaterial = mongoose.model('RawMaterial', rawMaterialSchema);
 const MaterialPurchase = mongoose.model('MaterialPurchase', materialPurchaseSchema);
 const MaterialHistory = mongoose.model('MaterialHistory', materialHistorySchema);
