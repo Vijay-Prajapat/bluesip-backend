@@ -1163,7 +1163,44 @@ app.delete('/api/users/:id', authMiddleware, async (req, res) => {
 });
 
 
+/************************************Calendar *******************/
 
+// In your invoice routes file
+router.get('/calendar', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    const invoices = await Invoice.find({
+      invoiceDate: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      }
+    }).lean();
+
+    // Calculate summary
+    const summary = {
+      totalInvoices: invoices.length,
+      totalAmount: invoices.reduce((sum, inv) => sum + inv.grandTotal, 0),
+      paidAmount: invoices.filter(i => i.invoiceStatus === 'paid')
+                         .reduce((sum, inv) => sum + inv.grandTotal, 0),
+      pendingAmount: invoices.filter(i => i.invoiceStatus === 'pending')
+                           .reduce((sum, inv) => sum + inv.grandTotal, 0),
+      statusCounts: invoices.reduce((acc, inv) => {
+        const status = inv.invoiceStatus;
+        if (!acc[status]) {
+          acc[status] = { count: 0, amount: 0 };
+        }
+        acc[status].count += 1;
+        acc[status].amount += inv.grandTotal;
+        return acc;
+      }, {})
+    };
+
+    res.json({ invoices, summary });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
