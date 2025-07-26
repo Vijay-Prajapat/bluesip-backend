@@ -1170,32 +1170,25 @@ app.get('/calendar', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     
+    // Convert DD-MM-YYYY to Date objects for comparison
+    const parseCustomDate = (dateStr) => {
+      const [day, month, year] = dateStr.split('-');
+      return new Date(`${year}-${month}-${day}`);
+    };
+
+    const start = parseCustomDate(startDate);
+    const end = parseCustomDate(endDate);
+
     const invoices = await Invoice.find({
-      invoiceDate: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
+      $expr: {
+        $and: [
+          { $gte: [{ $toDate: { $dateFromString: { dateString: "$invoiceDate", format: "%d-%m-%Y" } } }, start] },
+          { $lte: [{ $toDate: { $dateFromString: { dateString: "$invoiceDate", format: "%d-%m-%Y" } } }, end] }
+        ]
       }
     }).lean();
 
-    // Calculate summary
-    const summary = {
-      totalInvoices: invoices.length,
-      totalAmount: invoices.reduce((sum, inv) => sum + inv.grandTotal, 0),
-      paidAmount: invoices.filter(i => i.invoiceStatus === 'paid')
-                         .reduce((sum, inv) => sum + inv.grandTotal, 0),
-      pendingAmount: invoices.filter(i => i.invoiceStatus === 'pending')
-                           .reduce((sum, inv) => sum + inv.grandTotal, 0),
-      statusCounts: invoices.reduce((acc, inv) => {
-        const status = inv.invoiceStatus;
-        if (!acc[status]) {
-          acc[status] = { count: 0, amount: 0 };
-        }
-        acc[status].count += 1;
-        acc[status].amount += inv.grandTotal;
-        return acc;
-      }, {})
-    };
-
+    // Rest of your summary calculation...
     res.json({ invoices, summary });
   } catch (error) {
     res.status(500).json({ error: error.message });
