@@ -32,7 +32,7 @@ mongoose.connect(process.env.MONGO_URI);
 const allowedOrigins = [
   "http://localhost:3000",
   "https://bluesip.netlify.app",
-  "https://bluesip-frontend.vercel.app/"
+  "https://bluesip-frontend.vercel.app"
 ];
 
 const corsOptions = {
