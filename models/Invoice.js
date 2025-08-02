@@ -71,7 +71,8 @@ const invoiceSchema = new mongoose.Schema({
   buyer: {
     name: { type: String, required: true },
     address: { type: String },
-    state: { type: String }
+    state: { type: String },
+    buyerGSTIN :{type :String},
   },
 
   invoiceNo: { type: String, required: true, unique: true },
