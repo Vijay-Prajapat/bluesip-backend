@@ -154,6 +154,11 @@ const companyLabelSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true
+  }, 
+  bottleType:{
+    type : String,
+     enum: ['200ml', '500ml', '1L'],
+    required :true
   },
   stock: {
     type: Number,
