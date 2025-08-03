@@ -4,7 +4,7 @@ const rawMaterialSchema = new mongoose.Schema({
   materialType: {
     type: String,
     required: true,
-    enum: ['PET Bottle', 'Cap White', 'Cap Black', 'Shrink Roll']
+    enum: ['PET Bottle', 'Cap White', 'Cap Black','Cap Green' ,'Shrink Roll']
   },
   currentStock: {
     type: Number,
