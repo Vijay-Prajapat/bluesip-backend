@@ -49,7 +49,7 @@ const materialPurchaseSchema = new mongoose.Schema({
   materialType: {
     type: String,
     required: true,
-    enum: ['PET Bottle', 'Cap White', 'Cap Black', 'Shrink Roll']
+    enum: ['PET Bottle', 'Cap White', 'Cap Black', 'Shrink Roll' , 'Company Label', "Other"]
   },
   quantity: {
     type: Number,
@@ -158,6 +158,12 @@ const companyLabelSchema = new mongoose.Schema({
     type: String,
     enum: ['200ml', '500ml', '1L'],
     required: true
+  },
+  cost : {
+    type : Number,
+    default :0,
+    min :0,
+    required:true
   },
   stock: {
     type: Number,
