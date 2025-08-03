@@ -181,8 +181,6 @@ const companyLabelSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-companyLabelSchema.index({ labelName: 1, bottleType: 1 }, { unique: true });
-
 
 const CompanyLabel = mongoose.model('CompanyLabel', companyLabelSchema);
 const CompanyLabelHistory = mongoose.model('CompanyLabelHistory', companyLabelHistorySchema);
