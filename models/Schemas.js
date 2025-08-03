@@ -152,13 +152,12 @@ const companyLabelHistorySchema = new mongoose.Schema({
 const companyLabelSchema = new mongoose.Schema({
   labelName: {
     type: String,
-    required: true,
-    unique: true
+    required: true
   }, 
-  bottleType:{
-    type : String,
-     enum: ['200ml', '500ml', '1L'],
-    required :true
+  bottleType: {
+    type: String,
+    enum: ['200ml', '500ml', '1L'],
+    required: true
   },
   stock: {
     type: Number,
@@ -175,6 +174,9 @@ const companyLabelSchema = new mongoose.Schema({
     required: true
   }
 }, { timestamps: true });
+
+companyLabelSchema.index({ labelName: 1, bottleType: 1 }, { unique: true });
+
 
 const CompanyLabel = mongoose.model('CompanyLabel', companyLabelSchema);
 const CompanyLabelHistory = mongoose.model('CompanyLabelHistory', companyLabelHistorySchema);

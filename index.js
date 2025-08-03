@@ -876,16 +876,27 @@ app.get('/api/company-labels', authMiddleware, async (req, res) => {
 // POST create new label
 app.post('/api/company-labels', authMiddleware, async (req, res) => {
   try {
-    const { labelName, stock, minStockLevel, bottleType} = req.body;
-    
+    const { labelName, stock, minStockLevel, bottleType } = req.body;
+
+    // Step 1: Check if labelName + bottleType already exists
+    const existingLabel = await CompanyLabel.findOne({ labelName, bottleType });
+
+    if (existingLabel) {
+      return res.status(409).json({
+        error: `Label "${labelName}" with bottle type "${bottleType}" already exists. You can search and modify it.`
+      });
+    }
+
+    // Step 2: Create new label if not exists
     const newLabel = await CompanyLabel.create({
       labelName,
       stock: stock || 0,
       minStockLevel: minStockLevel || 1000,
-      bottleType : bottleType || "200ml",
+      bottleType: bottleType || "200ml",
       lastUpdatedBy: req.user.name
     });
 
+    // Step 3: Create label history
     await createLabelHistory(
       newLabel._id,
       'create',
@@ -902,10 +913,11 @@ app.post('/api/company-labels', authMiddleware, async (req, res) => {
   }
 });
 
+
 // PUT update label
 app.put('/api/company-labels/:id', authMiddleware, async (req, res) => {
   try {
-    const { labelName, stock, minStockLevel } = req.body;
+    const { labelName, stock, minStockLevel,bottleType } = req.body;
     const oldLabel = await CompanyLabel.findById(req.params.id);
 
     if (!oldLabel) {
@@ -918,6 +930,7 @@ app.put('/api/company-labels/:id', authMiddleware, async (req, res) => {
         labelName,
         stock,
         minStockLevel,
+        bottleType,
         lastUpdatedBy: req.user.name
       },
       { new: true }
