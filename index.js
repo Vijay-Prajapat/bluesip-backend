@@ -887,7 +887,16 @@ app.post('/api/company-labels', authMiddleware, async (req, res) => {
       lastUpdatedBy: req.user.name
     });
 
-  
+  await MaterialPurchase.create({
+    materialType:"Company Label",
+    quantity :stock,
+    purchaseDate: Date.now(),
+    cost : cost || 0,
+    supplier : "N/A",
+    companyName : labelName,
+    purchasedBy :req.user.name,
+    notes : `${labelName} is purchased by ${req.user.name}`
+  });
 
     await createLabelHistory(
       newLabel._id,
