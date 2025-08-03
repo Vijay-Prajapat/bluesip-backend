@@ -882,7 +882,7 @@ app.post('/api/company-labels', authMiddleware, async (req, res) => {
       labelName,
       stock: stock || 0,
       minStockLevel: minStockLevel || 1000,
-      bottleType,
+      bottleType : bottleType || "200ml",
       lastUpdatedBy: req.user.name
     });
 
