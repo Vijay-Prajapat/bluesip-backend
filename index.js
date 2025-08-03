@@ -876,12 +876,13 @@ app.get('/api/company-labels', authMiddleware, async (req, res) => {
 // POST create new label
 app.post('/api/company-labels', authMiddleware, async (req, res) => {
   try {
-    const { labelName, stock, minStockLevel } = req.body;
+    const { labelName, stock, minStockLevel, bottleType} = req.body;
     
     const newLabel = await CompanyLabel.create({
       labelName,
       stock: stock || 0,
       minStockLevel: minStockLevel || 1000,
+      bottleType,
       lastUpdatedBy: req.user.name
     });
 
