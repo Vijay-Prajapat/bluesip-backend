@@ -729,7 +729,7 @@ app.get('/api/material-purchases', authMiddleware, async (req, res) => {
 
         summary.materials[purchase.materialType].count += 1;
         summary.materials[purchase.materialType].quantity += purchase.quantity;
-        summary.materials[purchase.materialType].cost += purchase.cost;
+        summary.materials[purchase.materialType].cost += purchase.cost; 
       });
       
       return res.json({ purchases, summary });
@@ -911,6 +911,7 @@ app.post('/api/company-labels', authMiddleware, async (req, res) => {
     res.status(201).json(newLabel);
   } catch (error) {
     res.status(400).json({ error: error.message });
+    
   }
 });
 
